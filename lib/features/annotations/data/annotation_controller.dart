@@ -207,3 +207,6 @@ final annotationColorProvider =
 
 /// Currently selected stroke width (for drawing tool).
 final annotationStrokeWidthProvider = StateProvider<double>((_) => 3.0);
+
+/// Scroll lock state for annotation mode (when true, scrolling is disabled).
+final scrollLockProvider = StateProvider<bool>((_) => false);

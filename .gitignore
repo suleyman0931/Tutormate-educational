@@ -55,6 +55,11 @@ app.*.map.json
 *.zip
 build/
 
+# Secrets and API keys
+assets/config/gemini_key.txt
+*.env
+.env.*
+
 # User-specific files
 *.user
 *.userosscache

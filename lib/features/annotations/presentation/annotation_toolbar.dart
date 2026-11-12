@@ -23,6 +23,7 @@ class AnnotationToolbar extends ConsumerWidget {
     final tool = ref.watch(annotationToolProvider);
     final color = ref.watch(annotationColorProvider);
     final strokeWidth = ref.watch(annotationStrokeWidthProvider);
+    final scrollLocked = ref.watch(scrollLockProvider);
     final theme = Theme.of(context);
 
     return Container(
@@ -48,6 +49,15 @@ class AnnotationToolbar extends ConsumerWidget {
           padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
           child: Row(
             children: [
+              // ── Scroll Lock button ─────────────────────────────────────────
+              _ToolBtn(
+                icon: scrollLocked ? Icons.lock : Icons.lock_open,
+                label: scrollLocked ? 'Unlock Scroll' : 'Lock Scroll',
+                active: scrollLocked,
+                onTap: () => ref.read(scrollLockProvider.notifier).state = !scrollLocked,
+              ),
+              const SizedBox(width: 4),
+              
               // ── Tool buttons ───────────────────────────────────────────────
               _ToolBtn(
                 icon: Icons.draw_outlined,

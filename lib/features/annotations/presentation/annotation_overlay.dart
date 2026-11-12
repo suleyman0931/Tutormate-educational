@@ -46,7 +46,12 @@ class _AnnotationOverlayState extends ConsumerState<AnnotationOverlay> {
 
   void _onPanStart(DragStartDetails d) {
     final tool = _tool;
+    final scrollLocked = ref.read(scrollLockProvider);
+    
     if (tool == AnnotationTool.none) return;
+    
+    // If scroll is not locked, don't start annotation - allow scrolling
+    if (!scrollLocked) return;
 
     if (tool.isRectBased) {
       setState(() {
@@ -60,35 +65,37 @@ class _AnnotationOverlayState extends ConsumerState<AnnotationOverlay> {
           ..clear()
           ..add(d.localPosition);
       });
+    } else if (tool == AnnotationTool.eraser) {
+      _eraseAtPosition(d.localPosition);
     }
   }
 
   void _onPanUpdate(DragUpdateDetails d) {
     final tool = _tool;
-    if (tool == AnnotationTool.none) return;
-
-    // Allow scrolling at edges (within 40px from edge)
-    final pos = d.localPosition;
-    final isAtEdge = pos.dx < 40 || 
-                     pos.dx > widget.pageRect.width - 40 ||
-                     pos.dy < 40 || 
-                     pos.dy > widget.pageRect.height - 40;
+    final scrollLocked = ref.read(scrollLockProvider);
     
-    if (isAtEdge && tool == AnnotationTool.drawing) {
-      // Don't draw at edges - allow scroll
-      return;
-    }
+    if (tool == AnnotationTool.none) return;
+    
+    // If scroll is not locked, don't update annotation - allow scrolling
+    if (!scrollLocked) return;
 
     if (tool.isRectBased) {
       setState(() => _rectEnd = d.localPosition);
     } else if (tool == AnnotationTool.drawing) {
       setState(() => _currentStroke.add(d.localPosition));
+    } else if (tool == AnnotationTool.eraser) {
+      _eraseAtPosition(d.localPosition);
     }
   }
 
   Future<void> _onPanEnd(DragEndDetails _) async {
     final tool = _tool;
+    final scrollLocked = ref.read(scrollLockProvider);
+    
     if (tool == AnnotationTool.none) return;
+    
+    // If scroll was not locked, we didn't draw anything
+    if (!scrollLocked) return;
 
     final controller =
         ref.read(annotationControllerProvider(_pk).notifier);
@@ -190,6 +197,41 @@ class _AnnotationOverlayState extends ConsumerState<AnnotationOverlay> {
         text: text,
       ),
     );
+  }
+
+  void _eraseAtPosition(Offset position) {
+    final controller = ref.read(annotationControllerProvider(_pk).notifier);
+    final annotations = ref.read(annotationControllerProvider(_pk));
+    
+    // Find annotation whose rendered area contains the position.
+    for (int i = annotations.length - 1; i >= 0; i--) {
+      final item = annotations[i];
+      final data = item.data;
+      bool hit = false;
+
+      if (data is RectAnnotationData) {
+        final screenRect =
+            CoordinateUtils.rectToScreen(data.rect, widget.pageRect);
+        hit = screenRect.inflate(8).contains(position);
+      } else if (data is TextAnnotationData) {
+        final screenPos =
+            CoordinateUtils.toScreen(data.position, widget.pageRect);
+        hit = Rect.fromLTWH(screenPos.dx, screenPos.dy, 100, 30)
+            .inflate(8)
+            .contains(position);
+      } else if (data is DrawingAnnotationData) {
+        // Check if position is near any point of the stroke.
+        final screenPoints = CoordinateUtils.pointsToScreen(
+            data.points, widget.pageRect);
+        hit = screenPoints.any(
+            (p) => (p - position).distance < 20); // Increased radius for easier erasing
+      }
+
+      if (hit) {
+        controller.removeAnnotationAt(i);
+        return;
+      }
+    }
   }
 
   void _eraseAt(

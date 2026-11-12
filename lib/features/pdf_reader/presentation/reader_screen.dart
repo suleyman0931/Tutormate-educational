@@ -61,6 +61,9 @@ class _ReaderScreenState extends ConsumerState<ReaderScreen>
   // Dark mode flag
   bool _isDarkMode = false;
 
+  // Scroll lock flag for annotation mode
+  bool _scrollLocked = false;
+
   @override
   void initState() {
     super.initState();
@@ -720,13 +723,17 @@ class _ReaderScreenState extends ConsumerState<ReaderScreen>
                     : ReadingMode.continuous;
                 ref.read(readerSettingsProvider.notifier).setMode(next);
                 
-                // Force rebuild to apply mode immediately
-                if (mounted) {
+                // Force complete reload of viewer to apply mode change immediately
+                if (mounted && !_isAnnotationMode) {
                   setState(() {
                     _ready = false;
+                    _pdfViewController = null;
                   });
-                  Future.delayed(const Duration(milliseconds: 100), () {
-                    if (mounted) setState(() => _ready = true);
+                  // Rebuild after a brief delay
+                  Future.delayed(const Duration(milliseconds: 50), () {
+                    if (mounted) {
+                      setState(() => _ready = true);
+                    }
                   });
                 }
               },
