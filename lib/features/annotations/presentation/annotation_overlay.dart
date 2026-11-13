@@ -53,20 +53,25 @@ class _AnnotationOverlayState extends ConsumerState<AnnotationOverlay> {
     // If scroll is not locked, don't start annotation - allow scrolling
     if (!scrollLocked) return;
 
+    // Convert local position to screen coordinates
+    final screenPos = Offset(
+      d.localPosition.dx + widget.pageRect.left,
+      d.localPosition.dy + widget.pageRect.top,
+    );
+
     if (tool.isRectBased) {
       setState(() {
-        _rectStart = d.localPosition;
-        _rectEnd = d.localPosition;
+        _rectStart = screenPos;
+        _rectEnd = screenPos;
       });
     } else if (tool == AnnotationTool.drawing) {
-      // Start drawing immediately
       setState(() {
         _currentStroke
           ..clear()
-          ..add(d.localPosition);
+          ..add(screenPos);
       });
     } else if (tool == AnnotationTool.eraser) {
-      _eraseAtPosition(d.localPosition);
+      _eraseAtPosition(screenPos);
     }
   }
 
@@ -79,12 +84,18 @@ class _AnnotationOverlayState extends ConsumerState<AnnotationOverlay> {
     // If scroll is not locked, don't update annotation - allow scrolling
     if (!scrollLocked) return;
 
+    // Convert local position to screen coordinates
+    final screenPos = Offset(
+      d.localPosition.dx + widget.pageRect.left,
+      d.localPosition.dy + widget.pageRect.top,
+    );
+
     if (tool.isRectBased) {
-      setState(() => _rectEnd = d.localPosition);
+      setState(() => _rectEnd = screenPos);
     } else if (tool == AnnotationTool.drawing) {
-      setState(() => _currentStroke.add(d.localPosition));
+      setState(() => _currentStroke.add(screenPos));
     } else if (tool == AnnotationTool.eraser) {
-      _eraseAtPosition(d.localPosition);
+      _eraseAtPosition(screenPos);
     }
   }
 
@@ -152,10 +163,16 @@ class _AnnotationOverlayState extends ConsumerState<AnnotationOverlay> {
     final controller =
         ref.read(annotationControllerProvider(_pk).notifier);
 
+    // Convert local position to screen coordinates
+    final screenPos = Offset(
+      d.localPosition.dx + widget.pageRect.left,
+      d.localPosition.dy + widget.pageRect.top,
+    );
+
     if (tool == AnnotationTool.text) {
-      await _showTextInputDialog(d.localPosition, controller);
+      await _showTextInputDialog(screenPos, controller);
     } else if (tool == AnnotationTool.eraser) {
-      _eraseAt(d.localPosition, controller);
+      _eraseAt(screenPos, controller);
     }
   }
 
@@ -334,14 +351,20 @@ class _AnnotationPainter extends CustomPainter {
     }
 
     // Draw in-progress stroke/rect.
+    // Convert from screen coords to local canvas coords
     if (currentTool == AnnotationTool.drawing && currentStroke.length > 1) {
-      _paintStroke(canvas, currentStroke, currentColor, currentStrokeWidth);
+      final localStroke = currentStroke
+          .map((p) => p.translate(-pageRect.left, -pageRect.top))
+          .toList();
+      _paintStroke(canvas, localStroke, currentColor, currentStrokeWidth);
     } else if (currentTool.isRectBased &&
         rectStart != null &&
         rectEnd != null) {
-      final rect = Rect.fromPoints(rectStart!, rectEnd!);
-      // Convert to local — the GestureDetector gives us local coords already.
-      _paintRectAnnotation(canvas, rect, currentColor, currentTool);
+      final localRect = Rect.fromPoints(
+        rectStart!.translate(-pageRect.left, -pageRect.top),
+        rectEnd!.translate(-pageRect.left, -pageRect.top),
+      );
+      _paintRectAnnotation(canvas, localRect, currentColor, currentTool);
     }
 
     canvas.restore();
@@ -350,20 +373,16 @@ class _AnnotationPainter extends CustomPainter {
   void _paintAnnotation(Canvas canvas, AnnotationData data) {
     if (data is RectAnnotationData) {
       final screenRect =
-          CoordinateUtils.rectToScreen(data.rect, pageRect)
-              .translate(-pageRect.left, -pageRect.top);
+          CoordinateUtils.rectToScreen(data.rect, pageRect);
       _paintRectAnnotation(
           canvas, screenRect, data.color, _toolForType(data.type));
     } else if (data is TextAnnotationData) {
       final screenPos =
-          CoordinateUtils.toScreen(data.position, pageRect)
-              .translate(-pageRect.left, -pageRect.top);
+          CoordinateUtils.toScreen(data.position, pageRect);
       _paintText(canvas, screenPos, data.text, data.color, data.fontSize);
     } else if (data is DrawingAnnotationData) {
       final screenPoints = CoordinateUtils.pointsToScreen(
-              data.points, pageRect)
-          .map((p) => p.translate(-pageRect.left, -pageRect.top))
-          .toList();
+              data.points, pageRect);
       _paintStroke(
           canvas, screenPoints, data.color, data.strokeWidth);
     }

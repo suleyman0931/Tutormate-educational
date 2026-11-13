@@ -522,6 +522,7 @@ class _ReaderScreenState extends ConsumerState<ReaderScreen>
                     BlendMode.multiply,
                   ),
             child: PDFView(
+              key: ValueKey('pdf_${settings.mode.name}_$_isDarkMode'), // Force rebuild on mode/dark change
               filePath: _book!.filePath,
               enableSwipe: true,
               swipeHorizontal: settings.mode == ReadingMode.singlePage,
@@ -574,6 +575,8 @@ class _ReaderScreenState extends ConsumerState<ReaderScreen>
 
   // Annotation mode with pdfrx (annotations work properly)
   Widget _buildPdfrxReader() {
+    final scrollLocked = ref.watch(scrollLockProvider);
+    
     return Stack(
       children: [
         ColorFiltered(
@@ -596,7 +599,7 @@ class _ReaderScreenState extends ConsumerState<ReaderScreen>
               onPageChanged: _onPdfrxPageChanged,
               onViewerReady: _onPdfrxViewerReady,
               scaleEnabled: true,
-              panEnabled: true,
+              panEnabled: !scrollLocked, // Allow scrolling when not locked
               // Always use continuous scroll in annotation mode
               layoutPages: null, // continuous vertical layout
               pageOverlaysBuilder: (context, pageRect, page) => [
@@ -722,20 +725,7 @@ class _ReaderScreenState extends ConsumerState<ReaderScreen>
                     ? ReadingMode.singlePage
                     : ReadingMode.continuous;
                 ref.read(readerSettingsProvider.notifier).setMode(next);
-                
-                // Force complete reload of viewer to apply mode change immediately
-                if (mounted && !_isAnnotationMode) {
-                  setState(() {
-                    _ready = false;
-                    _pdfViewController = null;
-                  });
-                  // Rebuild after a brief delay
-                  Future.delayed(const Duration(milliseconds: 50), () {
-                    if (mounted) {
-                      setState(() => _ready = true);
-                    }
-                  });
-                }
+                // The Key in PDFView will force a complete rebuild automatically
               },
             ),
             IconButton(
