@@ -22,26 +22,79 @@ class DashboardScreen extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    final colorScheme = Theme.of(context).colorScheme;
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('TutorMate'),
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.bookmark_border),
-            tooltip: 'Bookmarks',
-            onPressed: () => context.push(AppRoutes.bookmarks),
-          ),
-        ],
-      ),
       body: RefreshIndicator(
         onRefresh: () async {},
-        child: ListView(
-          padding: const EdgeInsets.only(bottom: 24),
-          children: [
-            _StatsSection(),
-            _ContinueReadingSection(),
-            _RecentlyOpenedSection(),
-            _QuickActionsSection(),
+        child: CustomScrollView(
+          slivers: [
+            // Beautiful gradient header
+            SliverAppBar(
+              expandedHeight: 140,
+              floating: false,
+              pinned: true,
+              flexibleSpace: FlexibleSpaceBar(
+                background: Container(
+                  decoration: BoxDecoration(
+                    gradient: LinearGradient(
+                      begin: Alignment.topLeft,
+                      end: Alignment.bottomRight,
+                      colors: [
+                        colorScheme.primary,
+                        colorScheme.tertiary,
+                      ],
+                    ),
+                  ),
+                  child: SafeArea(
+                    child: Padding(
+                      padding: const EdgeInsets.fromLTRB(20, 16, 20, 8),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Row(
+                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                            children: [
+                              const Text(
+                                'TutorMate',
+                                style: TextStyle(
+                                  color: Colors.white,
+                                  fontSize: 26,
+                                  fontWeight: FontWeight.w800,
+                                  letterSpacing: 0.5,
+                                ),
+                              ),
+                              IconButton(
+                                icon: const Icon(Icons.bookmark_border,
+                                    color: Colors.white),
+                                tooltip: 'Bookmarks',
+                                onPressed: () =>
+                                    context.push(AppRoutes.bookmarks),
+                              ),
+                            ],
+                          ),
+                          const Text(
+                            'Your smart reading companion 📚',
+                            style: TextStyle(
+                              color: Colors.white70,
+                              fontSize: 14,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            ),
+            SliverList(
+              delegate: SliverChildListDelegate([
+                _StatsSection(),
+                _ContinueReadingSection(),
+                _RecentlyOpenedSection(),
+                _QuickActionsSection(),
+                const SizedBox(height: 24),
+              ]),
+            ),
           ],
         ),
       ),
@@ -71,7 +124,7 @@ class _StatsSection extends ConsumerWidget {
                 crossAxisCount: 3,
                 crossAxisSpacing: 8,
                 mainAxisSpacing: 8,
-                childAspectRatio: 1.0,
+                childAspectRatio: 0.95,
                 shrinkWrap: true,
                 physics: const NeverScrollableScrollPhysics(),
                 children: [

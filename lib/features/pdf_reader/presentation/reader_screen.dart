@@ -44,6 +44,10 @@ class _ReaderScreenState extends ConsumerState<ReaderScreen>
   bool _toolbarVisible = true;
   Timer? _toolbarHideTimer;
 
+  // Scroll handle Y position (draggable)
+  double _scrollHandleY = 0;
+  bool _scrollHandleInitialized = false;
+
   // Current state
   int _currentPage = 1;
   int _totalPages = 0;
@@ -517,57 +521,23 @@ class _ReaderScreenState extends ConsumerState<ReaderScreen>
       behavior: HitTestBehavior.translucent,
       child: Stack(
         children: [
-          // Wrap everything in a container that applies dark mode effect
-          if (_isDarkMode)
-            Container(
-              color: const Color(0xFF121212),
-              child: Stack(
-                children: [
-                  ColorFiltered(
-                    colorFilter: const ColorFilter.matrix([
-                      -1, 0, 0, 0, 255, // Red channel inversion
-                      0, -1, 0, 0, 255, // Green channel inversion
-                      0, 0, -1, 0, 255, // Blue channel inversion
-                      0, 0, 0, 1, 0,    // Alpha channel
-                    ]),
-                    child: PDFView(
-                      key: ValueKey('pdf_${settings.mode.name}_dark_$_isDarkMode'),
-                      filePath: _book!.filePath,
-                      enableSwipe: true,
-                      swipeHorizontal: settings.mode == ReadingMode.singlePage,
-                      autoSpacing: true,
-                      pageFling: settings.mode == ReadingMode.singlePage,
-                      pageSnap: settings.mode == ReadingMode.singlePage,
-                      defaultPage: _currentPage - 1,
-                      fitPolicy: FitPolicy.WIDTH,
-                      preventLinkNavigation: false,
-                      backgroundColor: const Color(0xFF121212),
-                      onRender: (pages) {
-                        if (mounted) {
-                          setState(() {
-                            _totalPages = pages ?? 0;
-                            _ready = true;
-                          });
-                        }
-                      },
-                      onError: (error) {
-                        if (mounted) {
-                          setState(() => _errorMessage = 'Error loading PDF: $error');
-                        }
-                      },
-                      onPageError: (page, error) {
-                        debugPrint('Error on page $page: $error');
-                      },
-                      onViewCreated: _onPdfViewCreated,
-                      onPageChanged: _onPageChanged,
-                    ),
-                  ),
-                ],
-              ),
-            )
-          else
-            PDFView(
-              key: ValueKey('pdf_${settings.mode.name}_light_$_isDarkMode'),
+          // Same ColorFiltered approach as annotation mode - inverts ALL content
+          ColorFiltered(
+            colorFilter: _isDarkMode
+                ? const ColorFilter.matrix([
+                    -1, 0, 0, 0, 255,
+                    0, -1, 0, 0, 255,
+                    0, 0, -1, 0, 255,
+                    0, 0, 0, 1, 0,
+                  ])
+                : const ColorFilter.matrix([
+                    1, 0, 0, 0, 0,
+                    0, 1, 0, 0, 0,
+                    0, 0, 1, 0, 0,
+                    0, 0, 0, 1, 0,
+                  ]),
+            child: PDFView(
+              key: ValueKey('pdf_${settings.mode.name}_$_isDarkMode'),
               filePath: _book!.filePath,
               enableSwipe: true,
               swipeHorizontal: settings.mode == ReadingMode.singlePage,
@@ -597,6 +567,7 @@ class _ReaderScreenState extends ConsumerState<ReaderScreen>
               onViewCreated: _onPdfViewCreated,
               onPageChanged: _onPageChanged,
             ),
+          ),
 
           if (_toolbarVisible)
             Positioned(
@@ -624,25 +595,39 @@ class _ReaderScreenState extends ConsumerState<ReaderScreen>
     
     return Stack(
       children: [
-        pdfrx.PdfViewer.file(
-          _book!.filePath,
-          key: ValueKey('pdfrx_${settings.mode.name}_$_isDarkMode'), // Force rebuild on mode change
-          controller: _pdfrxController,
-          params: pdfrx.PdfViewerParams(
-            backgroundColor: _isDarkMode ? const Color(0xFF1A1A1A) : Colors.white,
-            onPageChanged: _onPdfrxPageChanged,
-            onViewerReady: _onPdfrxViewerReady,
-            scaleEnabled: true,
-            panEnabled: true, // Always allow scrolling - annotation overlay uses HitTestBehavior to control
-            // layoutPages: null means continuous vertical scrolling
-            // When mode changes, the Key forces a rebuild with new layout
-            pageOverlaysBuilder: (context, pageRect, page) => [
-              AnnotationOverlay(
-                bookId: widget.bookId,
-                pageNumber: page.pageNumber,
-                pageRect: pageRect,
-              ),
-            ],
+        // Wrap in ColorFiltered for dark mode - inverts ALL content including text
+        ColorFiltered(
+          colorFilter: _isDarkMode
+              ? const ColorFilter.matrix([
+                  -1, 0, 0, 0, 255,
+                  0, -1, 0, 0, 255,
+                  0, 0, -1, 0, 255,
+                  0, 0, 0, 1, 0,
+                ])
+              : const ColorFilter.matrix([
+                  1, 0, 0, 0, 0,
+                  0, 1, 0, 0, 0,
+                  0, 0, 1, 0, 0,
+                  0, 0, 0, 1, 0,
+                ]), // identity - no change in light mode
+          child: pdfrx.PdfViewer.file(
+            _book!.filePath,
+            key: ValueKey('pdfrx_${settings.mode.name}_$_isDarkMode'),
+            controller: _pdfrxController,
+            params: pdfrx.PdfViewerParams(
+              backgroundColor: _isDarkMode ? const Color(0xFF1A1A1A) : Colors.white,
+              onPageChanged: _onPdfrxPageChanged,
+              onViewerReady: _onPdfrxViewerReady,
+              scaleEnabled: true,
+              panEnabled: true,
+              pageOverlaysBuilder: (context, pageRect, page) => [
+                AnnotationOverlay(
+                  bookId: widget.bookId,
+                  pageNumber: page.pageNumber,
+                  pageRect: pageRect,
+                ),
+              ],
+            ),
           ),
         ),
 
@@ -675,32 +660,67 @@ class _ReaderScreenState extends ConsumerState<ReaderScreen>
           },
         ),
 
-        // Floating scroll indicator - visual only (pdfrx handles scrolling naturally)
-        Positioned(
-          right: 12,
-          top: 120,
-          bottom: 120,
-          child: Container(
-            width: 40,
-            decoration: BoxDecoration(
-              color: Colors.blue.withValues(alpha: 0.6),
-              borderRadius: BorderRadius.circular(20),
-              boxShadow: [
-                BoxShadow(
-                  color: Colors.black.withValues(alpha: 0.3),
-                  blurRadius: 8,
-                  offset: const Offset(2, 2),
-                ),
-              ],
-            ),
-            child: const Icon(
-              Icons.drag_indicator,
-              color: Colors.white,
-              size: 24,
-            ),
+        // Small scroll handle on the right - drag up/down to scroll the page
+        _buildScrollHandle(),
+      ],
+    );
+  }
+
+  // A small draggable handle that scrolls the PDF viewer
+  Widget _buildScrollHandle() {
+    final screenHeight = MediaQuery.of(context).size.height;
+    // Initialize position to middle of screen on first build
+    if (!_scrollHandleInitialized) {
+      _scrollHandleY = screenHeight / 2 - 30;
+      _scrollHandleInitialized = true;
+    }
+
+    return Positioned(
+      right: 8,
+      top: _scrollHandleY,
+      child: GestureDetector(
+        onVerticalDragUpdate: (details) {
+          setState(() {
+            // Move the handle with finger
+            _scrollHandleY += details.delta.dy;
+            // Clamp to screen bounds
+            _scrollHandleY = _scrollHandleY.clamp(80.0, screenHeight - 160.0);
+          });
+          // Also scroll the PDF based on drag
+          final dy = details.delta.dy;
+          if (dy.abs() > 1) {
+            final currentPage = _pdfrxController.pageNumber ?? _currentPage;
+            if (dy > 8 && currentPage < _totalPages) {
+              _pdfrxController.goToPage(pageNumber: currentPage + 1);
+            } else if (dy < -8 && currentPage > 1) {
+              _pdfrxController.goToPage(pageNumber: currentPage - 1);
+            }
+          }
+        },
+        child: Container(
+          width: 36,
+          height: 60,
+          decoration: BoxDecoration(
+            color: Colors.blue.withValues(alpha: 0.85),
+            borderRadius: BorderRadius.circular(18),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withValues(alpha: 0.4),
+                blurRadius: 6,
+                offset: const Offset(2, 2),
+              ),
+            ],
+          ),
+          child: const Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Icon(Icons.keyboard_arrow_up, color: Colors.white, size: 18),
+              Icon(Icons.drag_handle, color: Colors.white, size: 16),
+              Icon(Icons.keyboard_arrow_down, color: Colors.white, size: 18),
+            ],
           ),
         ),
-      ],
+      ),
     );
   }
 
@@ -891,70 +911,6 @@ class _ReaderScreenState extends ConsumerState<ReaderScreen>
                 ),
               ),
             ],
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-/// Scroll thumb widget for annotation mode - allows scrolling while drawing
-class _ScrollThumb extends StatefulWidget {
-  const _ScrollThumb({required this.controller});
-  
-  final pdfrx.PdfViewerController controller;
-
-  @override
-  State<_ScrollThumb> createState() => _ScrollThumbState();
-}
-
-class _ScrollThumbState extends State<_ScrollThumb> {
-  late ScrollController _scrollController;
-  double _scrollOffset = 0;
-
-  @override
-  void initState() {
-    super.initState();
-    _scrollController = ScrollController();
-  }
-
-  @override
-  void dispose() {
-    _scrollController.dispose();
-    super.dispose();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return MouseRegion(
-      cursor: SystemMouseCursors.grab,
-      child: GestureDetector(
-        onVerticalDragUpdate: (details) {
-          setState(() {
-            _scrollOffset += details.delta.dy;
-          });
-          
-          // Scroll by dragging - use goToPage to navigate
-          // This is a simple implementation that navigates pages
-          // For more granular scrolling, would need custom implementation
-        },
-        child: Container(
-          width: 40,
-          decoration: BoxDecoration(
-            color: Colors.blue.withValues(alpha: 0.75),
-            borderRadius: BorderRadius.circular(20),
-            boxShadow: [
-              BoxShadow(
-                color: Colors.black.withValues(alpha: 0.4),
-                blurRadius: 8,
-                offset: const Offset(2, 2),
-              ),
-            ],
-          ),
-          child: const Icon(
-            Icons.drag_indicator,
-            color: Colors.white,
-            size: 24,
           ),
         ),
       ),
