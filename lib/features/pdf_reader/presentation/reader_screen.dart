@@ -516,57 +516,46 @@ class _ReaderScreenState extends ConsumerState<ReaderScreen>
   Widget _buildFlutterPdfViewReader() {
     final settings = ref.watch(readerSettingsProvider);
 
+    // flutter_pdfview renders natively on Android - ColorFiltered CANNOT affect it.
+    // Solution: overlay a dark blending layer on top of the native PDF view.
     return GestureDetector(
       onTap: _toggleToolbar,
       behavior: HitTestBehavior.translucent,
       child: Stack(
         children: [
-          // Same ColorFiltered approach as annotation mode - inverts ALL content
-          ColorFiltered(
-            colorFilter: _isDarkMode
-                ? const ColorFilter.matrix([
-                    -1, 0, 0, 0, 255,
-                    0, -1, 0, 0, 255,
-                    0, 0, -1, 0, 255,
-                    0, 0, 0, 1, 0,
-                  ])
-                : const ColorFilter.matrix([
-                    1, 0, 0, 0, 0,
-                    0, 1, 0, 0, 0,
-                    0, 0, 1, 0, 0,
-                    0, 0, 0, 1, 0,
-                  ]),
-            child: PDFView(
-              key: ValueKey('pdf_${settings.mode.name}_$_isDarkMode'),
-              filePath: _book!.filePath,
-              enableSwipe: true,
-              swipeHorizontal: settings.mode == ReadingMode.singlePage,
-              autoSpacing: true,
-              pageFling: settings.mode == ReadingMode.singlePage,
-              pageSnap: settings.mode == ReadingMode.singlePage,
-              defaultPage: _currentPage - 1,
-              fitPolicy: FitPolicy.WIDTH,
-              preventLinkNavigation: false,
-              backgroundColor: const Color(0xFFFFFFFF),
-              onRender: (pages) {
-                if (mounted) {
-                  setState(() {
-                    _totalPages = pages ?? 0;
-                    _ready = true;
-                  });
-                }
-              },
-              onError: (error) {
-                if (mounted) {
-                  setState(() => _errorMessage = 'Error loading PDF: $error');
-                }
-              },
-              onPageError: (page, error) {
-                debugPrint('Error on page $page: $error');
-              },
-              onViewCreated: _onPdfViewCreated,
-              onPageChanged: _onPageChanged,
-            ),
+          PDFView(
+            key: ValueKey('pdf_${settings.mode.name}_$_isDarkMode'),
+            filePath: _book!.filePath,
+            enableSwipe: true,
+            swipeHorizontal: settings.mode == ReadingMode.singlePage,
+            autoSpacing: true,
+            pageFling: settings.mode == ReadingMode.singlePage,
+            pageSnap: settings.mode == ReadingMode.singlePage,
+            defaultPage: _currentPage - 1,
+            fitPolicy: FitPolicy.WIDTH,
+            preventLinkNavigation: false,
+            backgroundColor: _isDarkMode
+                ? const Color(0xFF121212)
+                : const Color(0xFFFFFFFF),
+            nightMode: _isDarkMode, // ← native Android night mode
+            onRender: (pages) {
+              if (mounted) {
+                setState(() {
+                  _totalPages = pages ?? 0;
+                  _ready = true;
+                });
+              }
+            },
+            onError: (error) {
+              if (mounted) {
+                setState(() => _errorMessage = 'Error loading PDF: $error');
+              }
+            },
+            onPageError: (page, error) {
+              debugPrint('Error on page $page: $error');
+            },
+            onViewCreated: _onPdfViewCreated,
+            onPageChanged: _onPageChanged,
           ),
 
           if (_toolbarVisible)
@@ -669,9 +658,15 @@ class _ReaderScreenState extends ConsumerState<ReaderScreen>
   // A small draggable handle that scrolls the PDF viewer
   Widget _buildScrollHandle() {
     final screenHeight = MediaQuery.of(context).size.height;
-    // Initialize position to middle of screen on first build
+    final topBarHeight = 100.0;   // approx top bar
+    final bottomBarHeight = 80.0; // approx bottom bar + toolbar
+    final handleHeight = 60.0;
+    final minY = topBarHeight;
+    final maxY = screenHeight - bottomBarHeight - handleHeight;
+
+    // Initialize to middle on first build
     if (!_scrollHandleInitialized) {
-      _scrollHandleY = screenHeight / 2 - 30;
+      _scrollHandleY = (minY + maxY) / 2;
       _scrollHandleInitialized = true;
     }
 
@@ -681,25 +676,28 @@ class _ReaderScreenState extends ConsumerState<ReaderScreen>
       child: GestureDetector(
         onVerticalDragUpdate: (details) {
           setState(() {
-            // Move the handle with finger
             _scrollHandleY += details.delta.dy;
-            // Clamp to screen bounds
-            _scrollHandleY = _scrollHandleY.clamp(80.0, screenHeight - 160.0);
+            _scrollHandleY = _scrollHandleY.clamp(minY, maxY);
           });
-          // Also scroll the PDF based on drag
-          final dy = details.delta.dy;
-          if (dy.abs() > 1) {
+
+          // Calculate which page to go to based on handle position
+          // Map handle Y position (minY..maxY) → page (1.._totalPages)
+          if (_totalPages > 1) {
+            final ratio = (_scrollHandleY - minY) / (maxY - minY);
+            final targetPage = (ratio * (_totalPages - 1) + 1).round()
+                .clamp(1, _totalPages);
             final currentPage = _pdfrxController.pageNumber ?? _currentPage;
-            if (dy > 8 && currentPage < _totalPages) {
-              _pdfrxController.goToPage(pageNumber: currentPage + 1);
-            } else if (dy < -8 && currentPage > 1) {
-              _pdfrxController.goToPage(pageNumber: currentPage - 1);
+            if (targetPage != currentPage) {
+              _pdfrxController.goToPage(
+                pageNumber: targetPage,
+                duration: const Duration(milliseconds: 150),
+              );
             }
           }
         },
         child: Container(
           width: 36,
-          height: 60,
+          height: handleHeight,
           decoration: BoxDecoration(
             color: Colors.blue.withValues(alpha: 0.85),
             borderRadius: BorderRadius.circular(18),
