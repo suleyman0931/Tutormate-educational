@@ -517,11 +517,57 @@ class _ReaderScreenState extends ConsumerState<ReaderScreen>
       behavior: HitTestBehavior.translucent,
       child: Stack(
         children: [
-          // Wrap PDFView in Container with colored background for dark mode
-          Container(
-            color: _isDarkMode ? const Color(0xFF121212) : Colors.white,
-            child: PDFView(
-              key: ValueKey('pdf_${settings.mode.name}_$_isDarkMode'), // Force rebuild on mode/dark change
+          // Wrap everything in a container that applies dark mode effect
+          if (_isDarkMode)
+            Container(
+              color: const Color(0xFF121212),
+              child: Stack(
+                children: [
+                  ColorFiltered(
+                    colorFilter: const ColorFilter.matrix([
+                      -1, 0, 0, 0, 255, // Red channel inversion
+                      0, -1, 0, 0, 255, // Green channel inversion
+                      0, 0, -1, 0, 255, // Blue channel inversion
+                      0, 0, 0, 1, 0,    // Alpha channel
+                    ]),
+                    child: PDFView(
+                      key: ValueKey('pdf_${settings.mode.name}_dark_$_isDarkMode'),
+                      filePath: _book!.filePath,
+                      enableSwipe: true,
+                      swipeHorizontal: settings.mode == ReadingMode.singlePage,
+                      autoSpacing: true,
+                      pageFling: settings.mode == ReadingMode.singlePage,
+                      pageSnap: settings.mode == ReadingMode.singlePage,
+                      defaultPage: _currentPage - 1,
+                      fitPolicy: FitPolicy.WIDTH,
+                      preventLinkNavigation: false,
+                      backgroundColor: const Color(0xFF121212),
+                      onRender: (pages) {
+                        if (mounted) {
+                          setState(() {
+                            _totalPages = pages ?? 0;
+                            _ready = true;
+                          });
+                        }
+                      },
+                      onError: (error) {
+                        if (mounted) {
+                          setState(() => _errorMessage = 'Error loading PDF: $error');
+                        }
+                      },
+                      onPageError: (page, error) {
+                        debugPrint('Error on page $page: $error');
+                      },
+                      onViewCreated: _onPdfViewCreated,
+                      onPageChanged: _onPageChanged,
+                    ),
+                  ),
+                ],
+              ),
+            )
+          else
+            PDFView(
+              key: ValueKey('pdf_${settings.mode.name}_light_$_isDarkMode'),
               filePath: _book!.filePath,
               enableSwipe: true,
               swipeHorizontal: settings.mode == ReadingMode.singlePage,
@@ -531,7 +577,7 @@ class _ReaderScreenState extends ConsumerState<ReaderScreen>
               defaultPage: _currentPage - 1,
               fitPolicy: FitPolicy.WIDTH,
               preventLinkNavigation: false,
-              backgroundColor: _isDarkMode ? const Color(0xFF121212) : const Color(0xFFFFFFFF),
+              backgroundColor: const Color(0xFFFFFFFF),
               onRender: (pages) {
                 if (mounted) {
                   setState(() {
@@ -551,7 +597,6 @@ class _ReaderScreenState extends ConsumerState<ReaderScreen>
               onViewCreated: _onPdfViewCreated,
               onPageChanged: _onPageChanged,
             ),
-          ),
 
           if (_toolbarVisible)
             Positioned(
@@ -630,12 +675,30 @@ class _ReaderScreenState extends ConsumerState<ReaderScreen>
           },
         ),
 
-        // Floating scroll thumb - drag to scroll while drawing
+        // Floating scroll indicator - visual only (pdfrx handles scrolling naturally)
         Positioned(
           right: 12,
           top: 120,
           bottom: 120,
-          child: _ScrollThumb(controller: _pdfrxController),
+          child: Container(
+            width: 40,
+            decoration: BoxDecoration(
+              color: Colors.blue.withValues(alpha: 0.6),
+              borderRadius: BorderRadius.circular(20),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withValues(alpha: 0.3),
+                  blurRadius: 8,
+                  offset: const Offset(2, 2),
+                ),
+              ],
+            ),
+            child: const Icon(
+              Icons.drag_indicator,
+              color: Colors.white,
+              size: 24,
+            ),
+          ),
         ),
       ],
     );
