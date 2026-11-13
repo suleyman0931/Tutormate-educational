@@ -168,7 +168,8 @@ GoRouter buildRouter() {
         path: '${AppRoutes.reader}/:bookId',
         builder: (context, state) {
           final bookId = int.parse(state.pathParameters['bookId']!);
-          return ReaderScreen(bookId: bookId);
+          final pageNumber = state.extra as int?;
+          return ReaderScreen(bookId: bookId, pageNumber: pageNumber);
         },
       ),
       // Note edit/create route

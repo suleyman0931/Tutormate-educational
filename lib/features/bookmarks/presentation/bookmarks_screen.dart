@@ -133,8 +133,11 @@ class _BookmarkTile extends ConsumerWidget {
           ],
         ),
         onTap: () {
-          // Open reader at the bookmarked page.
-          context.push(AppRoutes.readerFor(bookmark.bookId));
+          // Open reader and pass the page number as extra data
+          context.push(
+            AppRoutes.readerFor(bookmark.bookId),
+            extra: bookmark.pageNumber,
+          );
         },
         isThreeLine:
             bookmark.description != null && bookmark.description!.isNotEmpty,

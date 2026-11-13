@@ -26,8 +26,9 @@ import '../data/reader_providers.dart';
 /// - Uses flutter_pdfview for reading (excellent gestures on Samsung A10s)
 /// - Switches to pdfrx when annotation mode is activated
 class ReaderScreen extends ConsumerStatefulWidget {
-  const ReaderScreen({super.key, required this.bookId});
+  const ReaderScreen({super.key, required this.bookId, this.pageNumber});
   final int bookId;
+  final int? pageNumber; // Page to open directly (from bookmark or continue)
 
   @override
   ConsumerState<ReaderScreen> createState() => _ReaderScreenState();
@@ -151,6 +152,13 @@ class _ReaderScreenState extends ConsumerState<ReaderScreen>
     // Create a modified book object with PDF path
     setState(() => _book = book.copyWith(filePath: pdfPath));
 
+    // If pageNumber was passed (from bookmark or AI), use it directly
+    if (widget.pageNumber != null && widget.pageNumber! > 0) {
+      setState(() => _currentPage = widget.pageNumber!);
+      await ref.read(booksDaoProvider).updateLastOpened(widget.bookId);
+      return;
+    }
+
     final progress =
         await ref.read(progressDaoProvider).getProgress(widget.bookId);
     if (progress != null && progress.currentPage > 1) {
@@ -177,9 +185,9 @@ class _ReaderScreenState extends ConsumerState<ReaderScreen>
         );
 
         if (shouldContinue == true) {
-          _currentPage = progress.currentPage;
+          setState(() => _currentPage = progress.currentPage);
         } else {
-          _currentPage = 1;
+          setState(() => _currentPage = 1);
         }
       }
     }
@@ -509,48 +517,36 @@ class _ReaderScreenState extends ConsumerState<ReaderScreen>
       behavior: HitTestBehavior.translucent,
       child: Stack(
         children: [
-          ColorFiltered(
-            colorFilter: _isDarkMode
-                ? const ColorFilter.matrix([
-                    -1, 0, 0, 0, 255, // Red channel inversion
-                    0, -1, 0, 0, 255, // Green channel inversion
-                    0, 0, -1, 0, 255, // Blue channel inversion
-                    0, 0, 0, 1, 0,    // Alpha channel (unchanged)
-                  ])
-                : const ColorFilter.mode(
-                    Colors.transparent,
-                    BlendMode.multiply,
-                  ),
-            child: PDFView(
-              key: ValueKey('pdf_${settings.mode.name}_$_isDarkMode'), // Force rebuild on mode/dark change
-              filePath: _book!.filePath,
-              enableSwipe: true,
-              swipeHorizontal: settings.mode == ReadingMode.singlePage,
-              autoSpacing: true,
-              pageFling: settings.mode == ReadingMode.singlePage,
-              pageSnap: settings.mode == ReadingMode.singlePage,
-              defaultPage: _currentPage - 1,
-              fitPolicy: FitPolicy.WIDTH,
-              preventLinkNavigation: false,
-              onRender: (pages) {
-                if (mounted) {
-                  setState(() {
-                    _totalPages = pages ?? 0;
-                    _ready = true;
-                  });
-                }
-              },
-              onError: (error) {
-                if (mounted) {
-                  setState(() => _errorMessage = 'Error loading PDF: $error');
-                }
-              },
-              onPageError: (page, error) {
-                debugPrint('Error on page $page: $error');
-              },
-              onViewCreated: _onPdfViewCreated,
-              onPageChanged: _onPageChanged,
-            ),
+          PDFView(
+            key: ValueKey('pdf_${settings.mode.name}_$_isDarkMode'), // Force rebuild on mode/dark change
+            filePath: _book!.filePath,
+            enableSwipe: true,
+            swipeHorizontal: settings.mode == ReadingMode.singlePage,
+            autoSpacing: true,
+            pageFling: settings.mode == ReadingMode.singlePage,
+            pageSnap: settings.mode == ReadingMode.singlePage,
+            defaultPage: _currentPage - 1,
+            fitPolicy: FitPolicy.WIDTH,
+            preventLinkNavigation: false,
+            backgroundColor: _isDarkMode ? const Color(0xFF121212) : Colors.white,
+            onRender: (pages) {
+              if (mounted) {
+                setState(() {
+                  _totalPages = pages ?? 0;
+                  _ready = true;
+                });
+              }
+            },
+            onError: (error) {
+              if (mounted) {
+                setState(() => _errorMessage = 'Error loading PDF: $error');
+              }
+            },
+            onPageError: (page, error) {
+              debugPrint('Error on page $page: $error');
+            },
+            onViewCreated: _onPdfViewCreated,
+            onPageChanged: _onPageChanged,
           ),
 
           if (_toolbarVisible)
@@ -575,43 +571,29 @@ class _ReaderScreenState extends ConsumerState<ReaderScreen>
 
   // Annotation mode with pdfrx (annotations work properly)
   Widget _buildPdfrxReader() {
-    final scrollLocked = ref.watch(scrollLockProvider);
     final settings = ref.watch(readerSettingsProvider);
     
     return Stack(
       children: [
-        ColorFiltered(
-          colorFilter: _isDarkMode
-              ? const ColorFilter.matrix([
-                  -1, 0, 0, 0, 255, // Red channel inversion
-                  0, -1, 0, 0, 255, // Green channel inversion
-                  0, 0, -1, 0, 255, // Blue channel inversion
-                  0, 0, 0, 1, 0,    // Alpha channel (unchanged)
-                ])
-              : const ColorFilter.mode(
-                  Colors.transparent,
-                  BlendMode.multiply,
-                ),
-          child: pdfrx.PdfViewer.file(
-            _book!.filePath,
-            key: ValueKey('pdfrx_${settings.mode.name}_$_isDarkMode'), // Force rebuild on mode change
-            controller: _pdfrxController,
-            params: pdfrx.PdfViewerParams(
-              backgroundColor: Colors.grey.shade900,
-              onPageChanged: _onPdfrxPageChanged,
-              onViewerReady: _onPdfrxViewerReady,
-              scaleEnabled: true,
-              panEnabled: !scrollLocked, // Allow scrolling when not locked
-              // layoutPages: null means continuous vertical scrolling
-              // When mode changes, the Key forces a rebuild with new layout
-              pageOverlaysBuilder: (context, pageRect, page) => [
-                AnnotationOverlay(
-                  bookId: widget.bookId,
-                  pageNumber: page.pageNumber,
-                  pageRect: pageRect,
-                ),
-              ],
-            ),
+        pdfrx.PdfViewer.file(
+          _book!.filePath,
+          key: ValueKey('pdfrx_${settings.mode.name}_$_isDarkMode'), // Force rebuild on mode change
+          controller: _pdfrxController,
+          params: pdfrx.PdfViewerParams(
+            backgroundColor: _isDarkMode ? const Color(0xFF1A1A1A) : Colors.white,
+            onPageChanged: _onPdfrxPageChanged,
+            onViewerReady: _onPdfrxViewerReady,
+            scaleEnabled: true,
+            panEnabled: true, // Always allow scrolling - annotation overlay uses HitTestBehavior to control
+            // layoutPages: null means continuous vertical scrolling
+            // When mode changes, the Key forces a rebuild with new layout
+            pageOverlaysBuilder: (context, pageRect, page) => [
+              AnnotationOverlay(
+                bookId: widget.bookId,
+                pageNumber: page.pageNumber,
+                pageRect: pageRect,
+              ),
+            ],
           ),
         ),
 
@@ -654,98 +636,136 @@ class _ReaderScreenState extends ConsumerState<ReaderScreen>
           begin: Alignment.topCenter,
           end: Alignment.bottomCenter,
           colors: [
-            Colors.black.withValues(alpha: 0.85),
-            Colors.transparent,
+            Colors.black.withValues(alpha: 0.87),
+            Colors.black.withValues(alpha: 0.5),
           ],
         ),
       ),
       child: SafeArea(
         bottom: false,
-        child: Row(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
           children: [
-            IconButton(
-              icon: const Icon(Icons.arrow_back, color: Colors.white),
-              onPressed: () => context.pop(),
-            ),
-            Expanded(
-              child: Text(
-                _book?.title ?? '',
-                style: const TextStyle(
-                  color: Colors.white,
-                  fontWeight: FontWeight.w600,
-                  fontSize: 16,
+            Row(
+              children: [
+                IconButton(
+                  icon: const Icon(Icons.arrow_back, color: Colors.white),
+                  onPressed: () => context.pop(),
+                  tooltip: 'Go back',
                 ),
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-              ),
-            ),
-            IconButton(
-              icon: const Icon(Icons.auto_awesome, color: Colors.white),
-              tooltip: 'Ask AI',
-              onPressed: () => context.push(
-                AppRoutes.aiFor(widget.bookId, page: _currentPage),
-              ),
-            ),
-            StreamBuilder<List<Bookmark>>(
-              stream: ref
-                  .read(bookmarksDaoProvider)
-                  .watchBookmarksByBook(widget.bookId),
-              builder: (context, snap) {
-                final bookmarked =
-                    snap.data?.any((b) => b.pageNumber == _currentPage) ??
-                        false;
-                return IconButton(
-                  icon: Icon(
-                    bookmarked ? Icons.bookmark : Icons.bookmark_border,
-                    color: bookmarked ? Colors.amber : Colors.white,
+                Expanded(
+                  child: Text(
+                    _book?.title ?? '',
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontWeight: FontWeight.w600,
+                      fontSize: 16,
+                    ),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
                   ),
-                  tooltip: bookmarked ? 'Remove Bookmark' : 'Add Bookmark',
-                  onPressed: _toggleBookmark,
-                );
-              },
-            ),
-            IconButton(
-              icon: Icon(
-                Icons.edit_outlined,
-                color: _isAnnotationMode ? Colors.amber : Colors.white,
-              ),
-              tooltip: _isAnnotationMode
-                  ? 'Exit annotation mode'
-                  : 'Annotate (pen, highlight)',
-              onPressed: _toggleAnnotationMode,
-            ),
-            IconButton(
-              icon: Icon(
-                settings.mode == ReadingMode.continuous
-                    ? Icons.view_day_outlined
-                    : Icons.swipe_outlined,
-                color: Colors.white,
-              ),
-              tooltip: 'Reading mode',
-              onPressed: () {
-                final next = settings.mode == ReadingMode.continuous
-                    ? ReadingMode.singlePage
-                    : ReadingMode.continuous;
-                ref.read(readerSettingsProvider.notifier).setMode(next);
-                // The Key in PDFView will force a complete rebuild automatically
-              },
-            ),
-            IconButton(
-              icon: Icon(
-                _isDarkMode ? Icons.dark_mode : Icons.light_mode,
-                color: _isDarkMode ? Colors.amber : Colors.white,
-              ),
-              tooltip: _isDarkMode ? 'Light mode' : 'Dark mode',
-              onPressed: () {
-                setState(() {
-                  _isDarkMode = !_isDarkMode;
-                });
-              },
-            ),
-            IconButton(
-              icon: const Icon(Icons.tag_outlined, color: Colors.white),
-              tooltip: 'Go to page',
-              onPressed: _showJumpToPageDialog,
+                ),
+                // Annotation tools - always visible
+                if (_isAnnotationMode)
+                  Consumer(
+                    builder: (ctx, ref, _) {
+                      final tool = ref.watch(annotationToolProvider);
+                      return Padding(
+                        padding: const EdgeInsets.only(right: 4),
+                        child: Tooltip(
+                          message: tool == AnnotationTool.drawing ? 'Drawing active' : tool == AnnotationTool.eraser ? 'Eraser active' : '',
+                          child: Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                            decoration: BoxDecoration(
+                              color: tool != AnnotationTool.none ? Colors.amber.withValues(alpha: 0.2) : Colors.transparent,
+                              borderRadius: BorderRadius.circular(8),
+                              border: tool != AnnotationTool.none ? Border.all(color: Colors.amber, width: 1) : null,
+                            ),
+                            child: Text(
+                              tool == AnnotationTool.drawing ? '✏️ Drawing' : tool == AnnotationTool.eraser ? '🗑️ Eraser' : '',
+                              style: const TextStyle(color: Colors.amber, fontSize: 12, fontWeight: FontWeight.w600),
+                            ),
+                          ),
+                        ),
+                      );
+                    },
+                  ),
+                IconButton(
+                  icon: const Icon(Icons.auto_awesome, color: Colors.white),
+                  tooltip: 'Ask AI',
+                  onPressed: () => context.push(
+                    AppRoutes.aiFor(widget.bookId, page: _currentPage),
+                  ),
+                ),
+                StreamBuilder<List<Bookmark>>(
+                  stream: ref
+                      .read(bookmarksDaoProvider)
+                      .watchBookmarksByBook(widget.bookId),
+                  builder: (context, snap) {
+                    final bookmarked =
+                        snap.data?.any((b) => b.pageNumber == _currentPage) ??
+                            false;
+                    return IconButton(
+                      icon: Icon(
+                        bookmarked ? Icons.bookmark : Icons.bookmark_border,
+                        color: bookmarked ? Colors.amber : Colors.white,
+                      ),
+                      tooltip: bookmarked ? 'Remove Bookmark' : 'Add Bookmark',
+                      onPressed: _toggleBookmark,
+                    );
+                  },
+                ),
+                if (!_isAnnotationMode)
+                  IconButton(
+                    icon: const Icon(Icons.edit_outlined, color: Colors.white),
+                    tooltip: 'Annotation Mode',
+                    onPressed: () {
+                      ref.read(annotationToolProvider.notifier).state = AnnotationTool.drawing;
+                      _toggleAnnotationMode();
+                    },
+                  ),
+                if (_isAnnotationMode)
+                  IconButton(
+                    icon: const Icon(Icons.close, color: Colors.white),
+                    tooltip: 'Exit Annotation Mode',
+                    onPressed: () {
+                      ref.read(annotationToolProvider.notifier).state = AnnotationTool.none;
+                      _toggleAnnotationMode();
+                    },
+                  ),
+                IconButton(
+                  icon: Icon(
+                    settings.mode == ReadingMode.continuous
+                        ? Icons.view_day_outlined
+                        : Icons.swipe_outlined,
+                    color: Colors.white,
+                  ),
+                  tooltip: 'Reading mode',
+                  onPressed: () {
+                    final next = settings.mode == ReadingMode.continuous
+                        ? ReadingMode.singlePage
+                        : ReadingMode.continuous;
+                    ref.read(readerSettingsProvider.notifier).setMode(next);
+                  },
+                ),
+                IconButton(
+                  icon: Icon(
+                    _isDarkMode ? Icons.dark_mode : Icons.light_mode,
+                    color: _isDarkMode ? Colors.amber : Colors.white,
+                  ),
+                  tooltip: _isDarkMode ? 'Light mode' : 'Dark mode',
+                  onPressed: () {
+                    setState(() {
+                      _isDarkMode = !_isDarkMode;
+                    });
+                  },
+                ),
+                IconButton(
+                  icon: const Icon(Icons.tag_outlined, color: Colors.white),
+                  tooltip: 'Go to page',
+                  onPressed: _showJumpToPageDialog,
+                ),
+              ],
             ),
           ],
         ),

@@ -46,14 +46,11 @@ class _AnnotationOverlayState extends ConsumerState<AnnotationOverlay> {
 
   void _onPanStart(DragStartDetails d) {
     final tool = _tool;
-    final scrollLocked = ref.read(scrollLockProvider);
     
-    if (tool == AnnotationTool.none) return;
-    
-    // If scroll is not locked, don't start annotation - allow scrolling
-    if (!scrollLocked) return;
+    if (tool == AnnotationTool.none || !tool.isActive) return;
 
-    // Use localPosition directly - overlay is already positioned at the page
+    // d.localPosition is in the overlay's local coordinate system
+    // which is the same as the page rect's coordinate system within the overlay
     final position = d.localPosition;
 
     if (tool.isRectBased) {
@@ -74,14 +71,9 @@ class _AnnotationOverlayState extends ConsumerState<AnnotationOverlay> {
 
   void _onPanUpdate(DragUpdateDetails d) {
     final tool = _tool;
-    final scrollLocked = ref.read(scrollLockProvider);
     
-    if (tool == AnnotationTool.none) return;
-    
-    // If scroll is not locked, don't update annotation - allow scrolling
-    if (!scrollLocked) return;
+    if (tool == AnnotationTool.none || !tool.isActive) return;
 
-    // Use localPosition directly - overlay is already positioned at the page
     final position = d.localPosition;
 
     if (tool.isRectBased) {
@@ -95,12 +87,8 @@ class _AnnotationOverlayState extends ConsumerState<AnnotationOverlay> {
 
   void _onPanEnd(DragEndDetails _) async {
     final tool = _tool;
-    final scrollLocked = ref.read(scrollLockProvider);
     
-    if (tool == AnnotationTool.none) return;
-    
-    // If scroll was not locked, we didn't draw anything
-    if (!scrollLocked) return;
+    if (tool == AnnotationTool.none || !tool.isActive) return;
 
     final controller =
         ref.read(annotationControllerProvider(_pk).notifier);
@@ -116,10 +104,10 @@ class _AnnotationOverlayState extends ConsumerState<AnnotationOverlay> {
         return;
       }
 
-      // Convert local rect to screen rect before normalizing
-      final absoluteRect = screenRect.translate(widget.pageRect.left, widget.pageRect.top);
+      // screenRect is already in the overlay's local coordinate system,
+      // which maps directly to normalized page coordinates
       final normRect = CoordinateUtils.rectToNormalized(
-          absoluteRect, widget.pageRect);
+          screenRect, Rect.fromLTWH(0, 0, widget.pageRect.width, widget.pageRect.height));
       late AnnotationType type;
       switch (tool) {
         case AnnotationTool.highlight:
@@ -139,12 +127,9 @@ class _AnnotationOverlayState extends ConsumerState<AnnotationOverlay> {
         _rectEnd = null;
       });
     } else if (tool == AnnotationTool.drawing && _currentStroke.length > 1) {
-      // Convert local points to screen points before normalizing
-      final absolutePoints = _currentStroke
-          .map((p) => p.translate(widget.pageRect.left, widget.pageRect.top))
-          .toList();
+      // _currentStroke points are in the overlay's local coordinate system
       final normPoints = CoordinateUtils.pointsToNormalized(
-          absolutePoints, widget.pageRect);
+          _currentStroke, Rect.fromLTWH(0, 0, widget.pageRect.width, widget.pageRect.height));
       await controller.addAnnotation(
         DrawingAnnotationData(
           color: _color,
@@ -158,7 +143,7 @@ class _AnnotationOverlayState extends ConsumerState<AnnotationOverlay> {
 
   Future<void> _onTapUp(TapUpDetails d) async {
     final tool = _tool;
-    if (tool == AnnotationTool.none) return;
+    if (tool == AnnotationTool.none || !tool.isActive) return;
 
     final controller =
         ref.read(annotationControllerProvider(_pk).notifier);
@@ -202,10 +187,9 @@ class _AnnotationOverlayState extends ConsumerState<AnnotationOverlay> {
       ),
     );
     if (text == null || text.isEmpty) return;
-    // Convert local position to screen position before normalizing
-    final absolutePos = tapPosition.translate(widget.pageRect.left, widget.pageRect.top);
+    // Convert local position to normalized position
     final normPos =
-        CoordinateUtils.toNormalized(absolutePos, widget.pageRect);
+        CoordinateUtils.toNormalized(tapPosition, Rect.fromLTWH(0, 0, widget.pageRect.width, widget.pageRect.height));
     await controller.addAnnotation(
       TextAnnotationData(
         color: _color,
@@ -219,31 +203,29 @@ class _AnnotationOverlayState extends ConsumerState<AnnotationOverlay> {
     final controller = ref.read(annotationControllerProvider(_pk).notifier);
     final annotations = ref.read(annotationControllerProvider(_pk));
     
-    // Convert local position to screen position
-    final absolutePos = position.translate(widget.pageRect.left, widget.pageRect.top);
+    // position is in overlay's local coordinate system
+    // Find annotation whose rendered area contains the position
+    final pageSize = Rect.fromLTWH(0, 0, widget.pageRect.width, widget.pageRect.height);
     
-    // Find annotation whose rendered area contains the position.
     for (int i = annotations.length - 1; i >= 0; i--) {
       final item = annotations[i];
       final data = item.data;
       bool hit = false;
 
       if (data is RectAnnotationData) {
-        final screenRect =
-            CoordinateUtils.rectToScreen(data.rect, widget.pageRect);
-        hit = screenRect.inflate(8).contains(absolutePos);
+        // Convert normalized rect to local coordinates
+        final localRect = CoordinateUtils.rectToScreen(data.rect, pageSize);
+        hit = localRect.inflate(8).contains(position);
       } else if (data is TextAnnotationData) {
-        final screenPos =
-            CoordinateUtils.toScreen(data.position, widget.pageRect);
-        hit = Rect.fromLTWH(screenPos.dx, screenPos.dy, 100, 30)
+        // Convert normalized position to local coordinates
+        final localPos = CoordinateUtils.toScreen(data.position, pageSize);
+        hit = Rect.fromLTWH(localPos.dx, localPos.dy, 100, 30)
             .inflate(8)
-            .contains(absolutePos);
+            .contains(position);
       } else if (data is DrawingAnnotationData) {
-        // Check if position is near any point of the stroke.
-        final screenPoints = CoordinateUtils.pointsToScreen(
-            data.points, widget.pageRect);
-        hit = screenPoints.any(
-            (p) => (p - absolutePos).distance < 20); // Increased radius for easier erasing
+        // Convert normalized points to local coordinates
+        final localPoints = CoordinateUtils.pointsToScreen(data.points, pageSize);
+        hit = localPoints.any((p) => (p - position).distance < 20);
       }
 
       if (hit) {
@@ -257,31 +239,28 @@ class _AnnotationOverlayState extends ConsumerState<AnnotationOverlay> {
       Offset tapPosition, AnnotationPageController controller) {
     final annotations = ref.read(annotationControllerProvider(_pk));
     
-    // Convert local position to screen position
-    final absolutePos = tapPosition.translate(widget.pageRect.left, widget.pageRect.top);
+    // tapPosition is in overlay's local coordinate system
+    final pageSize = Rect.fromLTWH(0, 0, widget.pageRect.width, widget.pageRect.height);
     
-    // Find annotation whose rendered area contains the tap.
     for (int i = annotations.length - 1; i >= 0; i--) {
       final item = annotations[i];
       final data = item.data;
       bool hit = false;
 
       if (data is RectAnnotationData) {
-        final screenRect =
-            CoordinateUtils.rectToScreen(data.rect, widget.pageRect);
-        hit = screenRect.inflate(8).contains(absolutePos);
+        // Convert normalized rect to local coordinates
+        final localRect = CoordinateUtils.rectToScreen(data.rect, pageSize);
+        hit = localRect.inflate(8).contains(tapPosition);
       } else if (data is TextAnnotationData) {
-        final screenPos =
-            CoordinateUtils.toScreen(data.position, widget.pageRect);
-        hit = Rect.fromLTWH(screenPos.dx, screenPos.dy, 100, 30)
+        // Convert normalized position to local coordinates
+        final localPos = CoordinateUtils.toScreen(data.position, pageSize);
+        hit = Rect.fromLTWH(localPos.dx, localPos.dy, 100, 30)
             .inflate(8)
-            .contains(absolutePos);
+            .contains(tapPosition);
       } else if (data is DrawingAnnotationData) {
-        // Check if tap is near any point of the stroke.
-        final screenPoints = CoordinateUtils.pointsToScreen(
-            data.points, widget.pageRect);
-        hit = screenPoints.any(
-            (p) => (p - absolutePos).distance < 16);
+        // Convert normalized points to local coordinates
+        final localPoints = CoordinateUtils.pointsToScreen(data.points, pageSize);
+        hit = localPoints.any((p) => (p - tapPosition).distance < 16);
       }
 
       if (hit) {
@@ -300,7 +279,10 @@ class _AnnotationOverlayState extends ConsumerState<AnnotationOverlay> {
     final tool = ref.watch(annotationToolProvider);
 
     return GestureDetector(
-      behavior: HitTestBehavior.translucent,
+      // Only absorb gestures when a tool is active - otherwise let pdfrx handle scrolling
+      // When tool is active, use opaque so all gestures in this overlay are captured
+      // When tool is inactive, use translucent to pass through to pdfrx
+      behavior: tool.isActive ? HitTestBehavior.opaque : HitTestBehavior.translucent,
       onPanStart: tool.isActive ? _onPanStart : null,
       onPanUpdate: tool.isActive ? _onPanUpdate : null,
       onPanEnd: tool.isActive ? _onPanEnd : null,
@@ -370,28 +352,19 @@ class _AnnotationPainter extends CustomPainter {
   }
 
   void _paintAnnotation(Canvas canvas, AnnotationData data) {
+    // pageRect is the overlay's size in its local coordinate system
+    // which is (0, 0, width, height) so we pass a local rect
+    final pageSize = Rect.fromLTWH(0, 0, pageRect.width, pageRect.height);
+    
     if (data is RectAnnotationData) {
-      final screenRect =
-          CoordinateUtils.rectToScreen(data.rect, pageRect);
-      // Convert to local canvas coordinates
-      final localRect = screenRect.translate(-pageRect.left, -pageRect.top);
-      _paintRectAnnotation(
-          canvas, localRect, data.color, _toolForType(data.type));
+      final localRect = CoordinateUtils.rectToScreen(data.rect, pageSize);
+      _paintRectAnnotation(canvas, localRect, data.color, _toolForType(data.type));
     } else if (data is TextAnnotationData) {
-      final screenPos =
-          CoordinateUtils.toScreen(data.position, pageRect);
-      // Convert to local canvas coordinates
-      final localPos = screenPos.translate(-pageRect.left, -pageRect.top);
+      final localPos = CoordinateUtils.toScreen(data.position, pageSize);
       _paintText(canvas, localPos, data.text, data.color, data.fontSize);
     } else if (data is DrawingAnnotationData) {
-      final screenPoints = CoordinateUtils.pointsToScreen(
-              data.points, pageRect);
-      // Convert to local canvas coordinates
-      final localPoints = screenPoints
-          .map((p) => p.translate(-pageRect.left, -pageRect.top))
-          .toList();
-      _paintStroke(
-          canvas, localPoints, data.color, data.strokeWidth);
+      final localPoints = CoordinateUtils.pointsToScreen(data.points, pageSize);
+      _paintStroke(canvas, localPoints, data.color, data.strokeWidth);
     }
   }
 
