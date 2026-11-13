@@ -576,6 +576,7 @@ class _ReaderScreenState extends ConsumerState<ReaderScreen>
   // Annotation mode with pdfrx (annotations work properly)
   Widget _buildPdfrxReader() {
     final scrollLocked = ref.watch(scrollLockProvider);
+    final settings = ref.watch(readerSettingsProvider);
     
     return Stack(
       children: [
@@ -593,6 +594,7 @@ class _ReaderScreenState extends ConsumerState<ReaderScreen>
                 ),
           child: pdfrx.PdfViewer.file(
             _book!.filePath,
+            key: ValueKey('pdfrx_${settings.mode.name}_$_isDarkMode'), // Force rebuild on mode change
             controller: _pdfrxController,
             params: pdfrx.PdfViewerParams(
               backgroundColor: Colors.grey.shade900,
@@ -600,8 +602,8 @@ class _ReaderScreenState extends ConsumerState<ReaderScreen>
               onViewerReady: _onPdfrxViewerReady,
               scaleEnabled: true,
               panEnabled: !scrollLocked, // Allow scrolling when not locked
-              // Always use continuous scroll in annotation mode
-              layoutPages: null, // continuous vertical layout
+              // layoutPages: null means continuous vertical scrolling
+              // When mode changes, the Key forces a rebuild with new layout
               pageOverlaysBuilder: (context, pageRect, page) => [
                 AnnotationOverlay(
                   bookId: widget.bookId,
