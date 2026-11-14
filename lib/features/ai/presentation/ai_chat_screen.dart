@@ -15,13 +15,21 @@ import 'ai_settings_dialog.dart';
 
 /// The AI Tutor tab: chat with Gemini about the PDFs in the library.
 class AiChatScreen extends ConsumerStatefulWidget {
-  const AiChatScreen({super.key, this.initialBookId, this.initialPage});
+  const AiChatScreen({
+    super.key,
+    this.initialBookId,
+    this.initialPage,
+    this.initialSelectedText,
+  });
 
   /// When set, the conversation starts focused on this book.
   final int? initialBookId;
 
   /// When set, passages from this page are prioritised.
   final int? initialPage;
+
+  /// When set, this text is pre-filled and sent automatically to Gemini.
+  final String? initialSelectedText;
 
   @override
   ConsumerState<AiChatScreen> createState() => _AiChatScreenState();
@@ -62,6 +70,20 @@ class _AiChatScreenState extends ConsumerState<AiChatScreen> {
     _selectedBookId = widget.initialBookId;
     _focusPage = widget.initialPage;
     _messages.add(_introMessage());
+
+    // If selected text was passed, pre-fill and auto-send it
+    if (widget.initialSelectedText != null &&
+        widget.initialSelectedText!.isNotEmpty) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        final question =
+            'Explain this text from the book:\n\n"${widget.initialSelectedText}"';
+        _inputController.text = question;
+        // Auto-send after short delay
+        Future.delayed(const Duration(milliseconds: 600), () {
+          if (mounted) _sendMessage();
+        });
+      });
+    }
   }
 
   @override

@@ -45,8 +45,15 @@ class AppRoutes {
   static String readerFor(int bookId) => '$reader/$bookId';
   static String bookEditFor(int id) => '$bookEdit/$id';
 
-  static String aiFor(int bookId, {int? page}) {
-    final query = page == null ? '' : '?page=$page';
+  static String aiFor(int bookId, {int? page, String? selectedText}) {
+    final params = <String, String>{};
+    if (page != null) params['page'] = '$page';
+    if (selectedText != null && selectedText.isNotEmpty) {
+      params['text'] = Uri.encodeComponent(selectedText);
+    }
+    final query = params.isEmpty
+        ? ''
+        : '?${params.entries.map((e) => '${e.key}=${e.value}').join('&')}';
     return '$ai/book/$bookId$query';
   }
 }
@@ -155,7 +162,15 @@ GoRouter buildRouter() {
         builder: (context, state) {
           final bookId = int.tryParse(state.pathParameters['bookId'] ?? '');
           final page = int.tryParse(state.uri.queryParameters['page'] ?? '');
-          return AiChatScreen(initialBookId: bookId, initialPage: page);
+          final encodedText = state.uri.queryParameters['text'];
+          final selectedText = encodedText != null
+              ? Uri.decodeComponent(encodedText)
+              : null;
+          return AiChatScreen(
+            initialBookId: bookId,
+            initialPage: page,
+            initialSelectedText: selectedText,
+          );
         },
       ),
       // About / developer information

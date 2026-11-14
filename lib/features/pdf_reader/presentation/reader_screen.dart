@@ -52,6 +52,9 @@ class _ReaderScreenState extends ConsumerState<ReaderScreen>
   double _readingScrollHandleY = 0;
   bool _readingScrollHandleInitialized = false;
 
+  // Selected text for AI
+  String _selectedText = '';
+
   // Current state
   int _currentPage = 1;
   int _totalPages = 0;
@@ -516,6 +519,68 @@ class _ReaderScreenState extends ConsumerState<ReaderScreen>
     );
   }
 
+  // Show dialog to type/paste text, then send to Gemini
+  Future<void> _showSelectTextDialog() async {
+    final textController = TextEditingController(text: _selectedText);
+    final result = await showDialog<String>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Row(
+          children: [
+            Icon(Icons.auto_awesome, color: Colors.amber),
+            SizedBox(width: 8),
+            Text('Ask AI about text'),
+          ],
+        ),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text(
+              'Type or paste text from the book, then AI will explain it:',
+              style: TextStyle(fontSize: 13),
+            ),
+            const SizedBox(height: 12),
+            TextField(
+              controller: textController,
+              maxLines: 5,
+              autofocus: true,
+              decoration: const InputDecoration(
+                hintText: 'Paste or type the text here...',
+                border: OutlineInputBorder(),
+              ),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(),
+            child: const Text('Cancel'),
+          ),
+          FilledButton.icon(
+            icon: const Icon(Icons.auto_awesome, size: 18),
+            label: const Text('Ask AI'),
+            onPressed: () {
+              final text = textController.text.trim();
+              if (text.isNotEmpty) Navigator.of(ctx).pop(text);
+            },
+          ),
+        ],
+      ),
+    );
+
+    if (result != null && result.isNotEmpty && mounted) {
+      setState(() => _selectedText = result);
+      context.push(
+        AppRoutes.aiFor(
+          widget.bookId,
+          page: _currentPage,
+          selectedText: result,
+        ),
+      );
+    }
+  }
+
   // Reading mode with flutter_pdfview (best gestures)
   Widget _buildFlutterPdfViewReader() {
     final settings = ref.watch(readerSettingsProvider);
@@ -801,6 +866,7 @@ class _ReaderScreenState extends ConsumerState<ReaderScreen>
   }
 
   Widget _buildTopBar(ReaderSettings settings) {
+    final isLandscape = MediaQuery.of(context).orientation == Orientation.landscape;
     return Container(
       decoration: BoxDecoration(
         gradient: LinearGradient(
@@ -823,6 +889,10 @@ class _ReaderScreenState extends ConsumerState<ReaderScreen>
                   icon: const Icon(Icons.arrow_back, color: Colors.white),
                   onPressed: () => context.pop(),
                   tooltip: 'Go back',
+                  iconSize: isLandscape ? 20 : 24,
+                  padding: isLandscape
+                      ? const EdgeInsets.all(4)
+                      : const EdgeInsets.all(8),
                 ),
                 Expanded(
                   child: Text(
@@ -867,6 +937,13 @@ class _ReaderScreenState extends ConsumerState<ReaderScreen>
                   onPressed: () => context.push(
                     AppRoutes.aiFor(widget.bookId, page: _currentPage),
                   ),
+                ),
+                // Ask AI about typed/selected text
+                IconButton(
+                  icon: const Icon(Icons.text_snippet_outlined,
+                      color: Colors.white),
+                  tooltip: 'Select text & Ask AI',
+                  onPressed: () => _showSelectTextDialog(),
                 ),
                 StreamBuilder<List<Bookmark>>(
                   stream: ref
