@@ -44,9 +44,13 @@ class _ReaderScreenState extends ConsumerState<ReaderScreen>
   bool _toolbarVisible = true;
   Timer? _toolbarHideTimer;
 
-  // Scroll handle Y position (draggable)
+  // Scroll handle Y position (draggable) - annotation mode
   double _scrollHandleY = 0;
   bool _scrollHandleInitialized = false;
+
+  // Scroll handle Y position - reading mode
+  double _readingScrollHandleY = 0;
+  bool _readingScrollHandleInitialized = false;
 
   // Current state
   int _currentPage = 1;
@@ -573,6 +577,9 @@ class _ReaderScreenState extends ConsumerState<ReaderScreen>
               right: 0,
               child: _buildBottomBar(),
             ),
+
+          // Scroll handle for fast navigation in reading mode
+          if (_ready) _buildReadingScrollHandle(),
         ],
       ),
     );
@@ -655,7 +662,78 @@ class _ReaderScreenState extends ConsumerState<ReaderScreen>
     );
   }
 
-  // A small draggable handle that scrolls the PDF viewer
+  // Scroll handle for READING mode - uses PDFViewController.setPage
+  Widget _buildReadingScrollHandle() {
+    final screenHeight = MediaQuery.of(context).size.height;
+    const topBarHeight = 100.0;
+    const bottomBarHeight = 80.0;
+    const handleHeight = 60.0;
+    const minY = topBarHeight;
+    final maxY = screenHeight - bottomBarHeight - handleHeight;
+
+    if (!_readingScrollHandleInitialized) {
+      _readingScrollHandleY = (minY + maxY) / 2;
+      _readingScrollHandleInitialized = true;
+    }
+
+    return Positioned(
+      right: 8,
+      top: _readingScrollHandleY,
+      child: GestureDetector(
+        onVerticalDragUpdate: (details) {
+          setState(() {
+            _readingScrollHandleY += details.delta.dy;
+            _readingScrollHandleY =
+                _readingScrollHandleY.clamp(minY, maxY);
+          });
+          // Map handle position to page number
+          if (_totalPages > 1 && _pdfViewController != null) {
+            final ratio =
+                (_readingScrollHandleY - minY) / (maxY - minY);
+            final targetPage =
+                (ratio * (_totalPages - 1)).round().clamp(0, _totalPages - 1);
+            _pdfViewController!.setPage(targetPage);
+          }
+        },
+        child: Container(
+          width: 36,
+          height: handleHeight,
+          decoration: BoxDecoration(
+            color: Colors.blue.withValues(alpha: 0.85),
+            borderRadius: BorderRadius.circular(18),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withValues(alpha: 0.4),
+                blurRadius: 6,
+                offset: const Offset(2, 2),
+              ),
+            ],
+          ),
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              const Icon(Icons.keyboard_arrow_up,
+                  color: Colors.white, size: 18),
+              const Icon(Icons.drag_handle, color: Colors.white, size: 16),
+              const Icon(Icons.keyboard_arrow_down,
+                  color: Colors.white, size: 18),
+              const SizedBox(height: 2),
+              Text(
+                '$_currentPage',
+                style: const TextStyle(
+                  color: Colors.white,
+                  fontSize: 9,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  // A small draggable handle that scrolls the PDF viewer (annotation mode)
   Widget _buildScrollHandle() {
     final screenHeight = MediaQuery.of(context).size.height;
     final topBarHeight = 100.0;   // approx top bar
