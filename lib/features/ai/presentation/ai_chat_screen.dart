@@ -80,7 +80,7 @@ class _AiChatScreenState extends ConsumerState<AiChatScreen> {
         _inputController.text = question;
         // Auto-send after short delay
         Future.delayed(const Duration(milliseconds: 600), () {
-          if (mounted) _sendMessage();
+          if (mounted) _send();
         });
       });
     }
