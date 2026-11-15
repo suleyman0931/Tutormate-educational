@@ -58,6 +58,19 @@ class PdfCoverGenerator {
     }
   }
 
+  /// Returns the number of pages in the PDF at [pdfPath], or 0 on error.
+  static Future<int> pageCount(String pdfPath) async {
+    PdfDocument? document;
+    try {
+      document = await PdfDocument.openFile(pdfPath);
+      return document.pages.length;
+    } catch (_) {
+      return 0;
+    } finally {
+      await document?.dispose();
+    }
+  }
+
   /// Converts BGRA8888 pixel data to RGBA8888.
   static Uint8List _bgraToRgba(Uint8List bgra) {
     final rgba = Uint8List(bgra.length);

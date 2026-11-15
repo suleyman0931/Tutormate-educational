@@ -17,12 +17,33 @@ import '../../library/data/library_providers.dart';
 /// - Continue Reading card for the last opened book
 /// - Recently Opened horizontal scroll
 /// - Quick Actions grid
-class DashboardScreen extends ConsumerWidget {
+class DashboardScreen extends ConsumerStatefulWidget {
   const DashboardScreen({super.key});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<DashboardScreen> createState() => _DashboardScreenState();
+}
+
+class _DashboardScreenState extends ConsumerState<DashboardScreen> {
+  final TextEditingController _searchController = TextEditingController();
+  String _query = '';
+
+  @override
+  void dispose() {
+    _searchController.dispose();
+    super.dispose();
+  }
+
+  void _clearSearch() {
+    _searchController.clear();
+    setState(() => _query = '');
+    FocusScope.of(context).unfocus();
+  }
+
+  @override
+  Widget build(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
+    final searching = _query.trim().isNotEmpty;
     return Scaffold(
       body: RefreshIndicator(
         onRefresh: () async {},
@@ -88,15 +109,199 @@ class DashboardScreen extends ConsumerWidget {
             ),
             SliverList(
               delegate: SliverChildListDelegate([
-                _StatsSection(),
-                _ContinueReadingSection(),
-                _RecentlyOpenedSection(),
-                _QuickActionsSection(),
+                _buildSearchBar(colorScheme),
+                if (searching)
+                  _SearchResultsSection(query: _query.trim())
+                else ...[
+                  _StatsSection(),
+                  _ContinueReadingSection(),
+                  _RecentlyOpenedSection(),
+                  _QuickActionsSection(),
+                ],
                 const SizedBox(height: 24),
               ]),
             ),
           ],
         ),
+      ),
+    );
+  }
+
+  Widget _buildSearchBar(ColorScheme colorScheme) {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(12, 12, 12, 0),
+      child: TextField(
+        controller: _searchController,
+        textInputAction: TextInputAction.search,
+        onChanged: (value) => setState(() => _query = value),
+        decoration: InputDecoration(
+          hintText: 'Search books by title, subject, or grade...',
+          prefixIcon: const Icon(Icons.search),
+          suffixIcon: _query.isEmpty
+              ? null
+              : IconButton(
+                  icon: const Icon(Icons.clear),
+                  tooltip: 'Clear search',
+                  onPressed: _clearSearch,
+                ),
+          filled: true,
+          fillColor: colorScheme.surfaceContainerHighest.withValues(alpha: 0.4),
+          border: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(14),
+            borderSide: BorderSide.none,
+          ),
+          contentPadding: const EdgeInsets.symmetric(vertical: 14),
+        ),
+      ),
+    );
+  }
+}
+
+// ── Search results ────────────────────────────────────────────────────────────
+
+class _SearchResultsSection extends ConsumerWidget {
+  const _SearchResultsSection({required this.query});
+
+  final String query;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final booksAsync = ref.watch(allBooksProvider);
+    final subjectMap = ref.watch(subjectMapProvider).valueOrNull ?? {};
+
+    return booksAsync.when(
+      data: (books) {
+        final q = query.toLowerCase();
+        final results = books.where((book) {
+          final subject = subjectMap[book.subjectId] ?? '';
+          return book.title.toLowerCase().contains(q) ||
+              subject.toLowerCase().contains(q) ||
+              'grade ${book.grade}'.contains(q);
+        }).toList()
+          ..sort((a, b) => a.title.toLowerCase().compareTo(
+                b.title.toLowerCase(),
+              ));
+
+        if (results.isEmpty) {
+          return Padding(
+            padding: const EdgeInsets.fromLTRB(24, 48, 24, 24),
+            child: Column(
+              children: [
+                Icon(
+                  Icons.search_off_rounded,
+                  size: 56,
+                  color: Theme.of(context)
+                      .colorScheme
+                      .onSurfaceVariant
+                      .withValues(alpha: 0.5),
+                ),
+                const SizedBox(height: 12),
+                Text(
+                  'No books match "$query"',
+                  style: Theme.of(context).textTheme.titleMedium,
+                  textAlign: TextAlign.center,
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  'Try a different title, subject, or grade.',
+                  style: Theme.of(context).textTheme.bodySmall,
+                  textAlign: TextAlign.center,
+                ),
+              ],
+            ),
+          );
+        }
+
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            SectionHeader(title: 'Search Results (${results.length})'),
+            for (final book in results)
+              _SearchResultTile(
+                book: book,
+                subjectName: subjectMap[book.subjectId],
+              ),
+          ],
+        );
+      },
+      loading: () => const Padding(
+        padding: EdgeInsets.all(32),
+        child: Center(child: CircularProgressIndicator()),
+      ),
+      error: (_, _) => const Padding(
+        padding: EdgeInsets.all(24),
+        child: Center(child: Text('Could not load books.')),
+      ),
+    );
+  }
+}
+
+class _SearchResultTile extends ConsumerWidget {
+  const _SearchResultTile({required this.book, this.subjectName});
+
+  final Book book;
+  final String? subjectName;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final colorScheme = Theme.of(context).colorScheme;
+    final subtitleParts = [
+      'Grade ${book.grade}',
+      if (subjectName != null && subjectName!.isNotEmpty) subjectName!,
+    ];
+
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+      child: Material(
+        color: colorScheme.surfaceContainerHighest.withValues(alpha: 0.25),
+        borderRadius: BorderRadius.circular(12),
+        clipBehavior: Clip.antiAlias,
+        child: ListTile(
+          onTap: () {
+            ref.read(booksDaoProvider).updateLastOpened(book.id);
+            context.push(AppRoutes.readerFor(book.id));
+          },
+          leading: ClipRRect(
+            borderRadius: BorderRadius.circular(6),
+            child: SizedBox(
+              width: 40,
+              height: 54,
+              child: _buildCover(colorScheme),
+            ),
+          ),
+          title: Text(
+            book.title,
+            maxLines: 2,
+            overflow: TextOverflow.ellipsis,
+          ),
+          subtitle: Text(
+            subtitleParts.join(' • '),
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+          ),
+          trailing: IconButton(
+            icon: const Icon(Icons.info_outline),
+            tooltip: 'Book details',
+            onPressed: () => context.push(AppRoutes.bookDetailsFor(book.id)),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildCover(ColorScheme colorScheme) {
+    if (book.coverPath != null && book.coverPath!.isNotEmpty) {
+      final file = File(book.coverPath!);
+      if (file.existsSync()) {
+        return Image.file(file, fit: BoxFit.cover);
+      }
+    }
+    return ColoredBox(
+      color: colorScheme.primaryContainer.withValues(alpha: 0.4),
+      child: Icon(
+        Icons.menu_book_rounded,
+        size: 22,
+        color: colorScheme.primary.withValues(alpha: 0.6),
       ),
     );
   }
@@ -536,7 +741,7 @@ class _QuickActionsSection extends ConsumerWidget {
             children: [
               _QuickActionTile(
                 icon: Icons.upload_file_outlined,
-                label: 'Import PDF',
+                label: 'Import Book',
                 color: const Color(0xFF1A237E),
                 onTap: () => context.push(AppRoutes.library),
               ),

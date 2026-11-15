@@ -69,6 +69,11 @@ final subjectMapProvider = StreamProvider<Map<int, String>>((ref) {
   });
 });
 
+/// Watches all books in the library (unfiltered).
+final allBooksProvider = StreamProvider<List<Book>>((ref) {
+  return ref.watch(booksDaoProvider).watchAllBooks();
+});
+
 // ── Filtered books ───────────────────────────────────────────────────────────
 
 /// Watches books filtered and sorted according to the current filter state.

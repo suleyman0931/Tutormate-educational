@@ -4,7 +4,6 @@ import 'dart:io';
 import 'package:drift/drift.dart' show Value;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:flutter_pdfview/flutter_pdfview.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:pdfrx/pdfrx.dart' as pdfrx;
@@ -14,6 +13,7 @@ import '../../../app/constants/app_constants.dart';
 import '../../../app/router.dart';
 import '../../../core/database/app_database.dart';
 import '../../../core/database/daos/bookmarks_dao.dart';
+import '../../../core/database/daos/progress_dao.dart';
 import '../../../core/utils/document_converter.dart';
 import '../../../core/widgets/loading_indicator.dart';
 import '../../annotations/data/annotation_controller.dart';
@@ -22,9 +22,10 @@ import '../../annotations/presentation/annotation_toolbar.dart';
 import '../../library/data/library_providers.dart';
 import '../data/reader_providers.dart';
 
-/// Hybrid PDF Reader:
-/// - Uses flutter_pdfview for reading (excellent gestures on Samsung A10s)
-/// - Switches to pdfrx when annotation mode is activated
+/// PDF reader powered by pdfrx (PDFium).
+///
+/// Handles document conversion, resume-at-last-page, reading modes, and
+/// annotation overlays.
 class ReaderScreen extends ConsumerStatefulWidget {
   const ReaderScreen({super.key, required this.bookId, this.pageNumber});
   final int bookId;
@@ -36,21 +37,15 @@ class ReaderScreen extends ConsumerStatefulWidget {
 
 class _ReaderScreenState extends ConsumerState<ReaderScreen>
     with WidgetsBindingObserver {
-  // Controllers for both viewers
-  PDFViewController? _pdfViewController;
   final pdfrx.PdfViewerController _pdfrxController = pdfrx.PdfViewerController();
 
   // Toolbar visibility
   bool _toolbarVisible = true;
   Timer? _toolbarHideTimer;
 
-  // Scroll handle Y position (draggable) - annotation mode
+  // Scroll handle Y position (draggable)
   double _scrollHandleY = 0;
   bool _scrollHandleInitialized = false;
-
-  // Scroll handle Y position - reading mode
-  double _readingScrollHandleY = 0;
-  bool _readingScrollHandleInitialized = false;
 
   // Selected text for AI
   String _selectedText = '';
@@ -59,6 +54,7 @@ class _ReaderScreenState extends ConsumerState<ReaderScreen>
   int _currentPage = 1;
   int _totalPages = 0;
   bool _ready = false;
+  bool _restoringPage = false;
   String? _errorMessage;
 
   // Periodic save timer
@@ -67,20 +63,21 @@ class _ReaderScreenState extends ConsumerState<ReaderScreen>
   // Current book
   Book? _book;
 
+  // Cached so progress can still be saved from dispose().
+  late final ProgressDao _progressDao;
+
   // Annotation mode flag
   bool _isAnnotationMode = false;
 
   // Dark mode flag
   bool _isDarkMode = false;
 
-  // Scroll lock flag for annotation mode
-  bool _scrollLocked = false;
-
   @override
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
     WakelockPlus.enable(); // Keep screen awake while reading
+    _progressDao = ref.read(progressDaoProvider);
     _loadBook();
     _schedulePeriodicSave();
     _resetToolbarTimer();
@@ -122,12 +119,9 @@ class _ReaderScreenState extends ConsumerState<ReaderScreen>
       return;
     }
 
-    // Check if document needs conversion to PDF
-    final extension = book.filePath.split('.').last.toLowerCase();
-    String pdfPath = book.filePath;
-
-    if (extension != 'pdf') {
-      // Show converting dialog
+    // Convert Word/text documents to PDF on demand (the result is cached).
+    var pdfPath = book.filePath;
+    if (DocumentConverter.needsConversion(book.filePath)) {
       if (mounted) {
         showDialog(
           context: context,
@@ -148,9 +142,11 @@ class _ReaderScreenState extends ConsumerState<ReaderScreen>
       try {
         pdfPath = await DocumentConverter.convertToPdf(book.filePath);
         if (mounted) Navigator.of(context).pop(); // Close converting dialog
-        
+
         if (!File(pdfPath).existsSync()) {
-          setState(() => _errorMessage = 'Conversion failed: PDF file not created.');
+          setState(
+            () => _errorMessage = 'Conversion failed: PDF file not created.',
+          );
           return;
         }
       } catch (e) {
@@ -160,21 +156,15 @@ class _ReaderScreenState extends ConsumerState<ReaderScreen>
       }
     }
 
-    // Create a modified book object with PDF path
-    setState(() => _book = book.copyWith(filePath: pdfPath));
+    // Decide the initial page BEFORE building the viewer, so it opens
+    // directly at the right page instead of flashing page 1.
+    var initialPage = 1;
 
-    // If pageNumber was passed (from bookmark or AI), use it directly
     if (widget.pageNumber != null && widget.pageNumber! > 0) {
-      setState(() => _currentPage = widget.pageNumber!);
-      await ref.read(booksDaoProvider).updateLastOpened(widget.bookId);
-      return;
-    }
-
-    final progress =
-        await ref.read(progressDaoProvider).getProgress(widget.bookId);
-    if (progress != null && progress.currentPage > 1) {
-      // Show "Continue reading?" dialog
-      if (mounted) {
+      initialPage = widget.pageNumber!;
+    } else {
+      final progress = await _progressDao.getProgress(widget.bookId);
+      if (progress != null && progress.currentPage > 1 && mounted) {
         final shouldContinue = await showDialog<bool>(
           context: context,
           builder: (context) => AlertDialog(
@@ -196,12 +186,17 @@ class _ReaderScreenState extends ConsumerState<ReaderScreen>
         );
 
         if (shouldContinue == true) {
-          setState(() => _currentPage = progress.currentPage);
-        } else {
-          setState(() => _currentPage = 1);
+          initialPage = progress.currentPage;
         }
       }
     }
+
+    if (!mounted) return;
+
+    setState(() {
+      _currentPage = initialPage;
+      _book = book.copyWith(filePath: pdfPath);
+    });
 
     await ref.read(booksDaoProvider).updateLastOpened(widget.bookId);
   }
@@ -214,63 +209,59 @@ class _ReaderScreenState extends ConsumerState<ReaderScreen>
   }
 
   Future<void> _saveProgress() async {
-    if (_book == null || _totalPages == 0) return;
+    if (_book == null || !_ready || _totalPages == 0) return;
     final page = _currentPage;
     final total = _totalPages;
-    await ref.read(progressDaoProvider).saveProgress(
-          bookId: widget.bookId,
-          currentPage: page,
-          progressPercentage: total > 0 ? page / total : 0,
-        );
-  }
-
-  void _onPageChanged(int? page, int? total) {
-    if (page != null && page != _currentPage) {
-      setState(() => _currentPage = page);
-      _saveProgress();
-    }
-    if (total != null && total != _totalPages) {
-      setState(() => _totalPages = total);
-    }
+    await _progressDao.saveProgress(
+      bookId: widget.bookId,
+      currentPage: page,
+      progressPercentage: total > 0 ? page / total : 0,
+    );
   }
 
   void _onPdfrxPageChanged(int? page) {
+    // Ignore callbacks fired while the viewer initializes or while we are
+    // restoring the saved page; otherwise page 1 overwrites the resume point.
+    if (!_ready || _restoringPage) return;
     if (page != null && page != _currentPage) {
       setState(() => _currentPage = page);
       _saveProgress();
     }
   }
 
-  void _onPdfViewCreated(PDFViewController controller) {
-    _pdfViewController = controller;
-    controller.getPageCount().then((count) {
-      if (mounted) {
-        setState(() {
-          _totalPages = count ?? 0;
-          _ready = true;
-        });
-      }
-    });
+  Future<void> _onPdfrxViewerReady(
+    pdfrx.PdfDocument document,
+    pdfrx.PdfViewerController controller,
+  ) async {
+    final pageCount = controller.pageCount;
+    var page = _currentPage;
+    if (page < 1) page = 1;
+    if (pageCount > 0 && page > pageCount) page = pageCount;
 
-    if (_currentPage > 1) {
-      Future.delayed(const Duration(milliseconds: 300), () {
-        _pdfViewController?.setPage(_currentPage);
-      });
-    }
-  }
-
-  void _onPdfrxViewerReady(pdfrx.PdfDocument document, pdfrx.PdfViewerController c) {
     setState(() {
-      _totalPages = c.pageCount;
+      _totalPages = pageCount;
+      _currentPage = page;
       _ready = true;
     });
 
-    if (_currentPage > 1) {
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (mounted) {
-          c.goToPage(pageNumber: _currentPage, duration: Duration.zero);
-        }
-      });
+    _restoringPage = true;
+    try {
+      if (page > 1) {
+        await controller.goToPage(
+          pageNumber: page,
+          duration: Duration.zero,
+        );
+      }
+    } finally {
+      _restoringPage = false;
+    }
+
+    if (pageCount > 0 && _book?.totalPages != pageCount) {
+      unawaited(
+        ref
+            .read(booksDaoProvider)
+            .updatePageCount(widget.bookId, pageCount),
+      );
     }
   }
 
@@ -301,14 +292,29 @@ class _ReaderScreenState extends ConsumerState<ReaderScreen>
       }
     });
 
-    // Sync page number when switching modes
-    if (_isAnnotationMode && _pdfViewController != null) {
-      _pdfViewController!.getCurrentPage().then((page) {
-        if (page != null && mounted) {
-          _pdfrxController.goToPage(pageNumber: page, duration: Duration.zero);
-        }
-      });
-    }
+    // The overlay builder changed; re-layout while keeping the current zoom.
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) _pdfrxController.invalidate();
+    });
+  }
+
+  void _setReadingMode(ReadingMode mode) {
+    if (ref.read(readerSettingsProvider).mode == mode) return;
+    final page = _currentPage;
+    ref.read(readerSettingsProvider.notifier).setMode(mode);
+
+    // pdfrx caches the page layout; invalidate so the new layout is applied.
+    // Then re-center the current page using the existing zoom level so the
+    // reading position and zoom are both preserved across the layout change.
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
+      if (!mounted) return;
+      _pdfrxController.invalidate();
+      await _pdfrxController.goToPage(
+        pageNumber: page,
+        anchor: pdfrx.PdfPageAnchor.center,
+        duration: Duration.zero,
+      );
+    });
   }
 
   Future<void> _showJumpToPageDialog() async {
@@ -369,11 +375,10 @@ class _ReaderScreenState extends ConsumerState<ReaderScreen>
       ),
     );
     if (result != null && result >= 1 && result <= _totalPages) {
-      if (_isAnnotationMode) {
-        _pdfrxController.goToPage(pageNumber: result);
-      } else {
-        _pdfViewController?.setPage(result);
-      }
+      await _pdfrxController.goToPage(
+        pageNumber: result,
+        duration: const Duration(milliseconds: 200),
+      );
     }
   }
 
@@ -693,9 +698,38 @@ class _ReaderScreenState extends ConsumerState<ReaderScreen>
     }
   }
 
-  // Unified reader using pdfrx (PDFium engine - supports ALL fonts/languages)
-  // pdfrx is used for both reading and annotation mode
-  Widget _buildFlutterPdfViewReader() => _buildPdfrxReader();
+  /// Horizontal strip used by single-page mode: all pages are laid out
+  /// side-by-side at their natural size. Horizontal paging then lets the
+  /// viewer snap one page at a time while the transform (zoom) is preserved
+  /// when switching modes.
+  static pdfrx.PdfPageLayout _singlePageLayout(
+    List<pdfrx.PdfPage> pages,
+    pdfrx.PdfViewerParams params,
+  ) {
+    var maxHeight = 0.0;
+    for (final page in pages) {
+      if (page.height > maxHeight) maxHeight = page.height;
+    }
+
+    final layouts = <Rect>[];
+    var x = params.margin;
+    for (final page in pages) {
+      layouts.add(
+        Rect.fromLTWH(
+          x,
+          params.margin + (maxHeight - page.height) / 2,
+          page.width,
+          page.height,
+        ),
+      );
+      x += page.width + params.margin;
+    }
+
+    return pdfrx.PdfPageLayout(
+      pageLayouts: layouts,
+      documentSize: Size(x, maxHeight + params.margin * 2),
+    );
+  }
 
   // pdfrx reader - supports ALL fonts, languages, scripts (Ethiopic, Arabic, etc.)
   Widget _buildPdfrxReader() {
@@ -723,8 +757,9 @@ class _ReaderScreenState extends ConsumerState<ReaderScreen>
             behavior: HitTestBehavior.translucent,
             child: pdfrx.PdfViewer.file(
               _book!.filePath,
-              key: ValueKey('pdfrx_${settings.mode.name}_${_isAnnotationMode}_$_isDarkMode'),
+              key: const ValueKey('pdfrx_reader'),
               controller: _pdfrxController,
+              initialPageNumber: _currentPage,
               params: pdfrx.PdfViewerParams(
                 backgroundColor: _isDarkMode
                     ? const Color(0xFF1A1A1A)
@@ -733,6 +768,9 @@ class _ReaderScreenState extends ConsumerState<ReaderScreen>
                 onViewerReady: _onPdfrxViewerReady,
                 scaleEnabled: true,
                 panEnabled: true,
+                layoutPages: settings.mode == ReadingMode.singlePage
+                    ? _singlePageLayout
+                    : null,
                 // Show annotation overlay only in annotation mode
                 pageOverlaysBuilder: _isAnnotationMode
                     ? (context, pageRect, page) => [
@@ -779,78 +817,7 @@ class _ReaderScreenState extends ConsumerState<ReaderScreen>
     );
   }
 
-  // Scroll handle for READING mode - uses PDFViewController.setPage
-  Widget _buildReadingScrollHandle() {
-    final screenHeight = MediaQuery.of(context).size.height;
-    const topBarHeight = 100.0;
-    const bottomBarHeight = 80.0;
-    const handleHeight = 60.0;
-    const minY = topBarHeight;
-    final maxY = screenHeight - bottomBarHeight - handleHeight;
-
-    if (!_readingScrollHandleInitialized) {
-      _readingScrollHandleY = (minY + maxY) / 2;
-      _readingScrollHandleInitialized = true;
-    }
-
-    return Positioned(
-      right: 8,
-      top: _readingScrollHandleY,
-      child: GestureDetector(
-        onVerticalDragUpdate: (details) {
-          setState(() {
-            _readingScrollHandleY += details.delta.dy;
-            _readingScrollHandleY =
-                _readingScrollHandleY.clamp(minY, maxY);
-          });
-          // Map handle position to page number
-          if (_totalPages > 1 && _pdfViewController != null) {
-            final ratio =
-                (_readingScrollHandleY - minY) / (maxY - minY);
-            final targetPage =
-                (ratio * (_totalPages - 1)).round().clamp(0, _totalPages - 1);
-            _pdfViewController!.setPage(targetPage);
-          }
-        },
-        child: Container(
-          width: 36,
-          height: handleHeight,
-          decoration: BoxDecoration(
-            color: Colors.blue.withValues(alpha: 0.85),
-            borderRadius: BorderRadius.circular(18),
-            boxShadow: [
-              BoxShadow(
-                color: Colors.black.withValues(alpha: 0.4),
-                blurRadius: 6,
-                offset: const Offset(2, 2),
-              ),
-            ],
-          ),
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              const Icon(Icons.keyboard_arrow_up,
-                  color: Colors.white, size: 18),
-              const Icon(Icons.drag_handle, color: Colors.white, size: 16),
-              const Icon(Icons.keyboard_arrow_down,
-                  color: Colors.white, size: 18),
-              const SizedBox(height: 2),
-              Text(
-                '$_currentPage',
-                style: const TextStyle(
-                  color: Colors.white,
-                  fontSize: 9,
-                  fontWeight: FontWeight.bold,
-                ),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-
-  // A small draggable handle that scrolls the PDF viewer (annotation mode)
+  // A small draggable handle for fast page navigation.
   Widget _buildScrollHandle() {
     final screenHeight = MediaQuery.of(context).size.height;
     final topBarHeight = 100.0;   // approx top bar
@@ -1045,7 +1012,7 @@ class _ReaderScreenState extends ConsumerState<ReaderScreen>
                     final next = settings.mode == ReadingMode.continuous
                         ? ReadingMode.singlePage
                         : ReadingMode.continuous;
-                    ref.read(readerSettingsProvider.notifier).setMode(next);
+                    _setReadingMode(next);
                   },
                 ),
                 IconButton(

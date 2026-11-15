@@ -12,8 +12,8 @@ import '../data/library_providers.dart';
 
 /// Screen for importing documents with metadata.
 ///
-/// Supports: PDF and Text (.txt)
-/// Text files are automatically converted to PDF.
+/// Supports: PDF, Word (.docx/.doc), and Text (.txt).
+/// Word/text files are converted to PDF automatically for reading.
 ///
 /// When a single file is selected, the user fills in all fields.
 /// When multiple files are selected, common metadata is set.
@@ -379,7 +379,7 @@ class _ImportScreenState extends ConsumerState<ImportScreen> {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Text(
-              '${widget.files.length} PDFs to import',
+              '${widget.files.length} documents to import',
               style: theme.textTheme.titleSmall?.copyWith(
                 fontWeight: FontWeight.w600,
               ),

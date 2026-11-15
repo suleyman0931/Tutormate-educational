@@ -109,6 +109,12 @@ class BooksDao {
         .write(BooksCompanion(lastOpenedAt: Value(DateTime.now())));
   }
 
+  /// Updates only the cached page count for a book.
+  Future<void> updatePageCount(int id, int totalPages) {
+    return (_db.update(_db.books)..where((t) => t.id.equals(id)))
+        .write(BooksCompanion(totalPages: Value(totalPages)));
+  }
+
   // ── Statistics ────────────────────────────────────────────────────────────
 
   /// Watches aggregated library statistics in a single query.

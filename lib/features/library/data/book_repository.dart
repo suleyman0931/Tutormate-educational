@@ -8,8 +8,8 @@ import '../../../core/database/enums.dart';
 import '../../../core/storage/cover_storage_service.dart';
 import '../../../core/storage/pdf_cover_generator.dart';
 import '../../../core/storage/pdf_storage_service.dart';
+import '../../../core/utils/document_converter.dart';
 import '../../../core/utils/file_utils.dart';
-import '../../../core/utils/text_to_pdf_converter.dart';
 
 /// Thrown when a PDF with the same content hash already exists in the library.
 class DuplicateBookException implements Exception {
@@ -110,14 +110,17 @@ class BookRepository {
       ),
     );
 
-    // 4. Copy the PDF into app-managed storage.
+    // 4. Copy the document into app-managed storage, preserving its format.
     String finalPath;
     try {
       if (file.path != null) {
-        finalPath = await _pdfStorage.importPdf(file.path!, bookId);
+        finalPath = await _pdfStorage.importDocument(file.path!, bookId);
       } else {
-        final bytes = await file.readAsBytes();
-        finalPath = await _pdfStorage.importPdfBytes(bytes, bookId);
+        finalPath = await _pdfStorage.importDocumentBytes(
+          await file.readAsBytes(),
+          bookId,
+          fileName: file.name,
+        );
       }
     } catch (e) {
       // Roll back: delete the book record if file copy fails.
@@ -125,16 +128,21 @@ class BookRepository {
       rethrow;
     }
 
-    // 5. Generate cover from first page (best-effort, never fails import).
+    // 5. Convert Word/text documents to PDF (cached for the reader), then
+    // generate a cover and count pages from the PDF.
+    final pdfPath = await _convertForPreview(finalPath);
     String? coverPath;
-    try {
-      final coverBytes =
-          await PdfCoverGenerator.generateCover(finalPath);
-      if (coverBytes != null) {
-        coverPath = await _coverStorage.saveCover(coverBytes, bookId);
+    var totalPages = 0;
+    if (pdfPath != null) {
+      totalPages = await PdfCoverGenerator.pageCount(pdfPath);
+      try {
+        final coverBytes = await PdfCoverGenerator.generateCover(pdfPath);
+        if (coverBytes != null) {
+          coverPath = await _coverStorage.saveCover(coverBytes, bookId);
+        }
+      } catch (_) {
+        // Cover generation is optional; ignore errors.
       }
-    } catch (_) {
-      // Cover generation is optional; ignore errors.
     }
 
     // 6. Update the book record with final file path, cover, and total pages.
@@ -144,11 +152,23 @@ class BookRepository {
         book.copyWith(
           filePath: finalPath,
           coverPath: Value(coverPath),
+          totalPages: totalPages,
         ),
       );
     }
 
     return bookId;
+  }
+
+  /// Converts [filePath] to PDF for preview purposes when needed.
+  /// Returns null if conversion fails (import still succeeds).
+  Future<String?> _convertForPreview(String filePath) async {
+    if (!DocumentConverter.needsConversion(filePath)) return filePath;
+    try {
+      return await DocumentConverter.convertToPdf(filePath);
+    } catch (_) {
+      return null;
+    }
   }
 
   /// Imports multiple PDFs in a batch with the same category, grade, subject.
@@ -224,16 +244,41 @@ class BookRepository {
     final book = await _booksDao.getBook(bookId);
     if (book == null) return;
 
-    // Delete old PDF from disk.
-    await _pdfStorage.deletePdf(book.filePath);
+    final oldPath = book.filePath;
 
-    // Copy new PDF.
+    // Copy the new document, preserving its format.
     String newPath;
     if (newFile.path != null) {
-      newPath = await _pdfStorage.importPdf(newFile.path!, bookId);
+      newPath = await _pdfStorage.importDocument(newFile.path!, bookId);
     } else {
-      final bytes = await newFile.readAsBytes();
-      newPath = await _pdfStorage.importPdfBytes(bytes, bookId);
+      newPath = await _pdfStorage.importDocumentBytes(
+        await newFile.readAsBytes(),
+        bookId,
+        fileName: newFile.name,
+      );
+    }
+
+    // Delete the old file and its cached conversion.
+    if (oldPath != newPath) {
+      await _pdfStorage.deletePdf(oldPath);
+      await DocumentConverter.removeCached(oldPath);
+    }
+    await DocumentConverter.removeCached(newPath);
+
+    // Convert for preview (cover + page count).
+    final pdfPath = await _convertForPreview(newPath);
+    String? coverPath;
+    var totalPages = 0;
+    if (pdfPath != null) {
+      totalPages = await PdfCoverGenerator.pageCount(pdfPath);
+      try {
+        final coverBytes = await PdfCoverGenerator.generateCover(pdfPath);
+        if (coverBytes != null) {
+          coverPath = await _coverStorage.saveCover(coverBytes, bookId);
+        }
+      } catch (_) {
+        // Cover generation is optional; ignore errors.
+      }
     }
 
     // Compute new hash.
@@ -244,6 +289,8 @@ class BookRepository {
       book.copyWith(
         filePath: newPath,
         fileHash: Value(hash),
+        coverPath: Value(coverPath),
+        totalPages: totalPages,
         updatedAt: DateTime.now(),
       ),
     );
@@ -259,6 +306,7 @@ class BookRepository {
     if (book == null) return;
 
     await _pdfStorage.deletePdf(book.filePath);
+    await DocumentConverter.removeCached(book.filePath);
     await _coverStorage.deleteCover(book.coverPath);
     await _booksDao.deleteBook(bookId);
   }
