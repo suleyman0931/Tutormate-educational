@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/gestures.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/database/enums.dart';
@@ -274,39 +275,44 @@ class _AnnotationOverlayState extends ConsumerState<AnnotationOverlay> {
 
   @override
   Widget build(BuildContext context) {
-    final annotations =
-        ref.watch(annotationControllerProvider(_pk));
+    final annotations = ref.watch(annotationControllerProvider(_pk));
     final tool = ref.watch(annotationToolProvider);
 
     return RawGestureDetector(
-      // Use RawGestureDetector so multi-finger zoom passes through to pdfrx
-      gestures: tool.isActive ? {
-        // Capture pan for drawing
-        PanGestureRecognizer: GestureRecognizerFactoryWithHandlers<PanGestureRecognizer>(
-          () => PanGestureRecognizer(),
-          (instance) {
-            instance.onStart = _onPanStart;
-            instance.onUpdate = _onPanUpdate;
-            instance.onEnd = _onPanEnd;
-          },
-        ),
-      } : {},
-      behavior: tool.isActive ? HitTestBehavior.opaque : HitTestBehavior.translucent,
-      child: GestureDetector(
-        behavior: HitTestBehavior.translucent,
-        onTapUp: tool.isActive ? _onTapUp : null,
-        child: CustomPaint(
-          size: Size(widget.pageRect.width, widget.pageRect.height),
-          painter: _AnnotationPainter(
-            annotations: annotations,
-            pageRect: widget.pageRect,
-            currentStroke: _currentStroke,
-            currentColor: _color,
-            currentStrokeWidth: _strokeWidth,
-            currentTool: tool,
-            rectStart: _rectStart,
-            rectEnd: _rectEnd,
-          ),
+      behavior: tool.isActive
+          ? HitTestBehavior.opaque
+          : HitTestBehavior.translucent,
+      gestures: tool.isActive
+          ? <Type, GestureRecognizerFactory>{
+              PanGestureRecognizer:
+                  GestureRecognizerFactoryWithHandlers<PanGestureRecognizer>(
+                () => PanGestureRecognizer(debugOwner: this),
+                (PanGestureRecognizer instance) {
+                  instance.onStart = _onPanStart;
+                  instance.onUpdate = _onPanUpdate;
+                  instance.onEnd = _onPanEnd;
+                },
+              ),
+              TapGestureRecognizer:
+                  GestureRecognizerFactoryWithHandlers<TapGestureRecognizer>(
+                () => TapGestureRecognizer(debugOwner: this),
+                (TapGestureRecognizer instance) {
+                  instance.onTapUp = _onTapUp;
+                },
+              ),
+            }
+          : const <Type, GestureRecognizerFactory>{},
+      child: CustomPaint(
+        size: Size(widget.pageRect.width, widget.pageRect.height),
+        painter: _AnnotationPainter(
+          annotations: annotations,
+          pageRect: widget.pageRect,
+          currentStroke: _currentStroke,
+          currentColor: _color,
+          currentStrokeWidth: _strokeWidth,
+          currentTool: tool,
+          rectStart: _rectStart,
+          rectEnd: _rectEnd,
         ),
       ),
     );
