@@ -426,17 +426,21 @@ class PdfAiContextService {
   }
 
   List<String> _splitIntoSentences(String text) {
+    // Split on common sentence-ending punctuation across languages:
+    // . ! ? (Latin), ። (Ethiopic full stop), ؟ (Arabic question mark),
+    // 。(Chinese/Japanese full stop), ॥ (Devanagari double danda)
     return text
-        .split(RegExp(r'[.!?]+'))
+        .split(RegExp(r'[.!?።؟。॥\n]+'))
         .map((s) => s.trim())
-        .where((s) => s.length > 20)
+        .where((s) => s.length > 10)
         .toList();
   }
 
   Set<String> _extractKeywords(String text) {
+    // Split on whitespace and punctuation - works for all languages
     return text
-        .split(RegExp(r'\W+'))
-        .where((w) => w.length > 3)
+        .split(RegExp(r'[\s\W]+'))
+        .where((w) => w.length > 2)
         .toSet();
   }
 

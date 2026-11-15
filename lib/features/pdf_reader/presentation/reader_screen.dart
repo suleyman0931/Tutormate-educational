@@ -486,9 +486,9 @@ class _ReaderScreenState extends ConsumerState<ReaderScreen>
             ? _buildErrorState()
             : _book == null
                 ? const LoadingIndicator(message: 'Opening book...')
-                : _isAnnotationMode
-                    ? _buildPdfrxReader()
-                    : _buildFlutterPdfViewReader(),
+                // Always use pdfrx - it supports ALL fonts and languages
+                // (uses PDFium engine like Chrome, supports Ethiopic, Arabic, etc.)
+                : _buildPdfrxReader(),
       ),
     );
   }
@@ -693,83 +693,16 @@ class _ReaderScreenState extends ConsumerState<ReaderScreen>
     }
   }
 
-  // Reading mode with flutter_pdfview (best gestures)
-  Widget _buildFlutterPdfViewReader() {
-    final settings = ref.watch(readerSettingsProvider);
+  // Unified reader using pdfrx (PDFium engine - supports ALL fonts/languages)
+  // pdfrx is used for both reading and annotation mode
+  Widget _buildFlutterPdfViewReader() => _buildPdfrxReader();
 
-    // flutter_pdfview renders natively on Android - ColorFiltered CANNOT affect it.
-    // Solution: overlay a dark blending layer on top of the native PDF view.
-    return GestureDetector(
-      onTap: _toggleToolbar,
-      onLongPress: () => _showTextContextMenu(),
-      behavior: HitTestBehavior.translucent,
-      child: Stack(
-        children: [
-          PDFView(
-            key: ValueKey('pdf_${settings.mode.name}_$_isDarkMode'),
-            filePath: _book!.filePath,
-            enableSwipe: true,
-            swipeHorizontal: settings.mode == ReadingMode.singlePage,
-            autoSpacing: true,
-            pageFling: settings.mode == ReadingMode.singlePage,
-            pageSnap: settings.mode == ReadingMode.singlePage,
-            defaultPage: _currentPage - 1,
-            fitPolicy: FitPolicy.WIDTH,
-            preventLinkNavigation: false,
-            backgroundColor: _isDarkMode
-                ? const Color(0xFF121212)
-                : const Color(0xFFFFFFFF),
-            nightMode: _isDarkMode, // ← native Android night mode
-            onRender: (pages) {
-              if (mounted) {
-                setState(() {
-                  _totalPages = pages ?? 0;
-                  _ready = true;
-                });
-              }
-            },
-            onError: (error) {
-              if (mounted) {
-                setState(() => _errorMessage = 'Error loading PDF: $error');
-              }
-            },
-            onPageError: (page, error) {
-              debugPrint('Error on page $page: $error');
-            },
-            onViewCreated: _onPdfViewCreated,
-            onPageChanged: _onPageChanged,
-          ),
-
-          if (_toolbarVisible)
-            Positioned(
-              top: 0,
-              left: 0,
-              right: 0,
-              child: _buildTopBar(settings),
-            ),
-
-          if (_toolbarVisible && settings.showPageNumbers && _ready)
-            Positioned(
-              bottom: 0,
-              left: 0,
-              right: 0,
-              child: _buildBottomBar(),
-            ),
-
-          // Scroll handle for fast navigation in reading mode
-          if (_ready) _buildReadingScrollHandle(),
-        ],
-      ),
-    );
-  }
-
-  // Annotation mode with pdfrx (annotations work properly)
+  // pdfrx reader - supports ALL fonts, languages, scripts (Ethiopic, Arabic, etc.)
   Widget _buildPdfrxReader() {
     final settings = ref.watch(readerSettingsProvider);
     
     return Stack(
       children: [
-        // Wrap in ColorFiltered for dark mode - inverts ALL content including text
         ColorFiltered(
           colorFilter: _isDarkMode
               ? const ColorFilter.matrix([
@@ -783,24 +716,34 @@ class _ReaderScreenState extends ConsumerState<ReaderScreen>
                   0, 1, 0, 0, 0,
                   0, 0, 1, 0, 0,
                   0, 0, 0, 1, 0,
-                ]), // identity - no change in light mode
-          child: pdfrx.PdfViewer.file(
-            _book!.filePath,
-            key: ValueKey('pdfrx_${settings.mode.name}_$_isDarkMode'),
-            controller: _pdfrxController,
-            params: pdfrx.PdfViewerParams(
-              backgroundColor: _isDarkMode ? const Color(0xFF1A1A1A) : Colors.white,
-              onPageChanged: _onPdfrxPageChanged,
-              onViewerReady: _onPdfrxViewerReady,
-              scaleEnabled: true,
-              panEnabled: true,
-              pageOverlaysBuilder: (context, pageRect, page) => [
-                AnnotationOverlay(
-                  bookId: widget.bookId,
-                  pageNumber: page.pageNumber,
-                  pageRect: pageRect,
-                ),
-              ],
+                ]),
+          child: GestureDetector(
+            onTap: _toggleToolbar,
+            onLongPress: _showTextContextMenu,
+            behavior: HitTestBehavior.translucent,
+            child: pdfrx.PdfViewer.file(
+              _book!.filePath,
+              key: ValueKey('pdfrx_${settings.mode.name}_${_isAnnotationMode}_$_isDarkMode'),
+              controller: _pdfrxController,
+              params: pdfrx.PdfViewerParams(
+                backgroundColor: _isDarkMode
+                    ? const Color(0xFF1A1A1A)
+                    : Colors.white,
+                onPageChanged: _onPdfrxPageChanged,
+                onViewerReady: _onPdfrxViewerReady,
+                scaleEnabled: true,
+                panEnabled: true,
+                // Show annotation overlay only in annotation mode
+                pageOverlaysBuilder: _isAnnotationMode
+                    ? (context, pageRect, page) => [
+                        AnnotationOverlay(
+                          bookId: widget.bookId,
+                          pageNumber: page.pageNumber,
+                          pageRect: pageRect,
+                        ),
+                      ]
+                    : null,
+              ),
             ),
           ),
         ),
@@ -810,10 +753,10 @@ class _ReaderScreenState extends ConsumerState<ReaderScreen>
             top: 0,
             left: 0,
             right: 0,
-            child: _buildTopBar(ref.read(readerSettingsProvider)),
+            child: _buildTopBar(settings),
           ),
 
-        if (_toolbarVisible && ref.read(readerSettingsProvider).showPageNumbers && _ready)
+        if (_toolbarVisible && settings.showPageNumbers && _ready)
           Positioned(
             bottom: 0,
             left: 0,
@@ -821,20 +764,17 @@ class _ReaderScreenState extends ConsumerState<ReaderScreen>
             child: _buildBottomBar(),
           ),
 
-        Consumer(
-          builder: (ctx, ref, _) {
-            // Always show toolbar in annotation mode
-            return Positioned(
-              bottom: 0,
-              left: 0,
-              right: 0,
-              child: const AnnotationToolbar(),
-            );
-          },
-        ),
+        // Annotation toolbar - only shown in annotation mode
+        if (_isAnnotationMode)
+          Positioned(
+            bottom: 0,
+            left: 0,
+            right: 0,
+            child: const AnnotationToolbar(),
+          ),
 
-        // Small scroll handle on the right - drag up/down to scroll the page
-        _buildScrollHandle(),
+        // Scroll handle for fast page navigation
+        if (_ready) _buildScrollHandle(),
       ],
     );
   }

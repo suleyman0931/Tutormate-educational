@@ -52,9 +52,12 @@ class _AiChatScreenState extends ConsumerState<AiChatScreen> {
     'Auto-detect',
     'English',
     'Amharic (አማርኛ)',
+    'Afaan Oromo',
+    'Tigrinya (ትግርኛ)',
+    'Somali (Soomaali)',
     'Arabic (العربية)',
-    'Spanish (Español)',
     'French (Français)',
+    'Spanish (Español)',
     'German (Deutsch)',
     'Chinese (中文)',
     'Japanese (日本語)',
@@ -62,6 +65,8 @@ class _AiChatScreenState extends ConsumerState<AiChatScreen> {
     'Portuguese (Português)',
     'Russian (Русский)',
     'Hindi (हिन्दी)',
+    'Swahili (Kiswahili)',
+    'Hausa',
   ];
 
   @override
