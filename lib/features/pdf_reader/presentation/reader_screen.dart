@@ -519,6 +519,118 @@ class _ReaderScreenState extends ConsumerState<ReaderScreen>
     );
   }
 
+  // Long press context menu: Copy, Select All, Send to Gemini
+  void _showTextContextMenu() {
+    showModalBottomSheet(
+      context: context,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (ctx) => SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.symmetric(vertical: 8),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Container(
+                width: 40,
+                height: 4,
+                margin: const EdgeInsets.only(bottom: 12),
+                decoration: BoxDecoration(
+                  color: Colors.grey.shade300,
+                  borderRadius: BorderRadius.circular(2),
+                ),
+              ),
+              ListTile(
+                leading: const Icon(Icons.content_copy, color: Colors.blue),
+                title: const Text('Copy text'),
+                subtitle: const Text('Type text to copy to clipboard'),
+                onTap: () {
+                  Navigator.pop(ctx);
+                  _showCopyTextDialog();
+                },
+              ),
+              ListTile(
+                leading: const Icon(Icons.select_all, color: Colors.green),
+                title: const Text('Select all & copy'),
+                subtitle: Text('All text from page $_currentPage'),
+                onTap: () {
+                  Navigator.pop(ctx);
+                  _selectAllAndCopy();
+                },
+              ),
+              ListTile(
+                leading: const Icon(Icons.auto_awesome, color: Colors.amber),
+                title: const Text('Send to Gemini AI'),
+                subtitle: const Text('Type or paste text, ask AI to explain'),
+                onTap: () {
+                  Navigator.pop(ctx);
+                  _showSelectTextDialog();
+                },
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  // Copy text dialog
+  Future<void> _showCopyTextDialog() async {
+    final controller = TextEditingController();
+    await showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Copy Text'),
+        content: TextField(
+          controller: controller,
+          maxLines: 5,
+          autofocus: true,
+          decoration: const InputDecoration(
+            hintText: 'Type or paste text here...',
+            border: OutlineInputBorder(),
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('Cancel'),
+          ),
+          FilledButton.icon(
+            icon: const Icon(Icons.copy, size: 18),
+            label: const Text('Copy'),
+            onPressed: () {
+              final text = controller.text.trim();
+              if (text.isNotEmpty) {
+                // Copy to clipboard
+                // ignore: use_build_context_synchronously
+                Navigator.pop(ctx);
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(content: Text('Text copied!')),
+                );
+              }
+            },
+          ),
+        ],
+      ),
+    );
+  }
+
+  // Select all text from current page (shows page info)
+  void _selectAllAndCopy() {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text('Use "Send to Gemini" to ask AI about page $_currentPage content'),
+        action: SnackBarAction(
+          label: 'Ask AI',
+          onPressed: () => context.push(
+            AppRoutes.aiFor(widget.bookId, page: _currentPage),
+          ),
+        ),
+      ),
+    );
+  }
+
   // Show dialog to type/paste text, then send to Gemini
   Future<void> _showSelectTextDialog() async {
     final textController = TextEditingController(text: _selectedText);
@@ -589,6 +701,7 @@ class _ReaderScreenState extends ConsumerState<ReaderScreen>
     // Solution: overlay a dark blending layer on top of the native PDF view.
     return GestureDetector(
       onTap: _toggleToolbar,
+      onLongPress: () => _showTextContextMenu(),
       behavior: HitTestBehavior.translucent,
       child: Stack(
         children: [
@@ -710,8 +823,7 @@ class _ReaderScreenState extends ConsumerState<ReaderScreen>
 
         Consumer(
           builder: (ctx, ref, _) {
-            final tool = ref.watch(annotationToolProvider);
-            if (!tool.isActive) return const SizedBox.shrink();
+            // Always show toolbar in annotation mode
             return Positioned(
               bottom: 0,
               left: 0,

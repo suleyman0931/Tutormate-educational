@@ -278,26 +278,35 @@ class _AnnotationOverlayState extends ConsumerState<AnnotationOverlay> {
         ref.watch(annotationControllerProvider(_pk));
     final tool = ref.watch(annotationToolProvider);
 
-    return GestureDetector(
-      // Only absorb gestures when a tool is active - otherwise let pdfrx handle scrolling
-      // When tool is active, use opaque so all gestures in this overlay are captured
-      // When tool is inactive, use translucent to pass through to pdfrx
+    return RawGestureDetector(
+      // Use RawGestureDetector so multi-finger zoom passes through to pdfrx
+      gestures: tool.isActive ? {
+        // Capture pan for drawing
+        PanGestureRecognizer: GestureRecognizerFactoryWithHandlers<PanGestureRecognizer>(
+          () => PanGestureRecognizer(),
+          (instance) {
+            instance.onStart = _onPanStart;
+            instance.onUpdate = _onPanUpdate;
+            instance.onEnd = _onPanEnd;
+          },
+        ),
+      } : {},
       behavior: tool.isActive ? HitTestBehavior.opaque : HitTestBehavior.translucent,
-      onPanStart: tool.isActive ? _onPanStart : null,
-      onPanUpdate: tool.isActive ? _onPanUpdate : null,
-      onPanEnd: tool.isActive ? _onPanEnd : null,
-      onTapUp: tool.isActive ? _onTapUp : null,
-      child: CustomPaint(
-        size: Size(widget.pageRect.width, widget.pageRect.height),
-        painter: _AnnotationPainter(
-          annotations: annotations,
-          pageRect: widget.pageRect,
-          currentStroke: _currentStroke,
-          currentColor: _color,
-          currentStrokeWidth: _strokeWidth,
-          currentTool: tool,
-          rectStart: _rectStart,
-          rectEnd: _rectEnd,
+      child: GestureDetector(
+        behavior: HitTestBehavior.translucent,
+        onTapUp: tool.isActive ? _onTapUp : null,
+        child: CustomPaint(
+          size: Size(widget.pageRect.width, widget.pageRect.height),
+          painter: _AnnotationPainter(
+            annotations: annotations,
+            pageRect: widget.pageRect,
+            currentStroke: _currentStroke,
+            currentColor: _color,
+            currentStrokeWidth: _strokeWidth,
+            currentTool: tool,
+            rectStart: _rectStart,
+            rectEnd: _rectEnd,
+          ),
         ),
       ),
     );
