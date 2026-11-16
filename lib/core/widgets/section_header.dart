@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
-/// A consistent section header row with title and optional action link.
+/// A consistent section header with a small accent bar, title, and optional
+/// action link.
 class SectionHeader extends StatelessWidget {
   const SectionHeader({
     super.key,
@@ -15,28 +16,51 @@ class SectionHeader extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final ColorScheme colorScheme = Theme.of(context).colorScheme;
+    final TextTheme textTheme = Theme.of(context).textTheme;
+
     return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+      padding: const EdgeInsets.fromLTRB(16, 20, 16, 10),
       child: Row(
         children: [
+          Container(
+            width: 4,
+            height: 18,
+            decoration: BoxDecoration(
+              gradient: LinearGradient(
+                begin: Alignment.topCenter,
+                end: Alignment.bottomCenter,
+                colors: [colorScheme.primary, colorScheme.secondary],
+              ),
+              borderRadius: BorderRadius.circular(4),
+            ),
+          ),
+          const SizedBox(width: 10),
           Expanded(
             child: Text(
               title,
-              style: Theme.of(context).textTheme.titleSmall?.copyWith(
-                    fontWeight: FontWeight.w700,
-                    letterSpacing: 0.3,
-                  ),
+              style: textTheme.titleMedium?.copyWith(
+                fontWeight: FontWeight.w700,
+                letterSpacing: -0.2,
+              ),
             ),
           ),
           if (actionLabel != null && onAction != null)
             TextButton(
               onPressed: onAction,
               style: TextButton.styleFrom(
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                 tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                minimumSize: Size.zero,
               ),
-              child: Text(actionLabel!),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text(actionLabel!),
+                  const SizedBox(width: 2),
+                  const Icon(Icons.arrow_forward_rounded, size: 15),
+                ],
+              ),
             ),
         ],
       ),

@@ -1,9 +1,11 @@
-/// Run with: dart run scripts/generate_icons.dart
-///
-/// Generates TutorMate launcher icons for all Android mipmap densities
-/// by rendering the icon programmatically and saving as PNG.
-///
-/// Requires the `image` package (already in pubspec.yaml via pdfrx → image).
+// Run with: dart run scripts/generate_icons.dart
+//
+// Generates TutorMate launcher icons for all Android mipmap densities
+// by rendering the icon programmatically and saving as PNG.
+//
+// Requires the `image` package (already in pubspec.yaml via pdfrx → image).
+
+// ignore_for_file: depend_on_referenced_packages
 
 import 'dart:io';
 import 'dart:math' as math;
@@ -27,16 +29,16 @@ void main() async {
     final outPath = '$baseDir/${entry.key}/ic_launcher.png';
     final file = File(outPath);
     await file.writeAsBytes(img.encodePng(icon));
-    print('✓ Generated $outPath ($size×$size)');
+    stdout.writeln('✓ Generated $outPath ($size×$size)');
   }
 
   // Also generate a 1024×1024 version for Play Store
   final large = _generateIcon(1024);
   final largeFile = File('scripts/ic_launcher_1024.png');
   await largeFile.writeAsBytes(img.encodePng(large));
-  print('✓ Generated scripts/ic_launcher_1024.png (1024×1024)');
+  stdout.writeln('✓ Generated scripts/ic_launcher_1024.png (1024×1024)');
 
-  print('\nAll icons generated successfully!');
+  stdout.writeln('\nAll icons generated successfully!');
 }
 
 img.Image _generateIcon(int size) {
@@ -72,24 +74,48 @@ img.Image _generateIcon(int size) {
   final spine = cx;
 
   // Left page (white, slightly tilted trapezoid)
-  _fillPoly(image, [
-    _P(spine, top - s * 0.015),
-    _P(left + s * 0.02, top + s * 0.03),
-    _P(left, bot - s * 0.03),
-    _P(spine, bot + s * 0.015),
-  ], 0xFF, 0xFF, 0xFF, 248);
+  _fillPoly(
+    image,
+    [
+      _P(spine, top - s * 0.015),
+      _P(left + s * 0.02, top + s * 0.03),
+      _P(left, bot - s * 0.03),
+      _P(spine, bot + s * 0.015),
+    ],
+    0xFF,
+    0xFF,
+    0xFF,
+    248,
+  );
 
   // Right page (slightly off-white)
-  _fillPoly(image, [
-    _P(spine, top - s * 0.015),
-    _P(right - s * 0.02, top + s * 0.03),
-    _P(right, bot - s * 0.03),
-    _P(spine, bot + s * 0.015),
-  ], 0xF0, 0xF2, 0xFF, 240);
+  _fillPoly(
+    image,
+    [
+      _P(spine, top - s * 0.015),
+      _P(right - s * 0.02, top + s * 0.03),
+      _P(right, bot - s * 0.03),
+      _P(spine, bot + s * 0.015),
+    ],
+    0xF0,
+    0xF2,
+    0xFF,
+    240,
+  );
 
   // Spine shadow line
-  _drawLine(image, spine.round(), (top - s * 0.02).round(),
-      spine.round(), (bot + s * 0.02).round(), 0xC5, 0xCA, 0xE9, 160, 2);
+  _drawLine(
+    image,
+    spine.round(),
+    (top - s * 0.02).round(),
+    spine.round(),
+    (bot + s * 0.02).round(),
+    0xC5,
+    0xCA,
+    0xE9,
+    160,
+    2,
+  );
 
   // ── Text lines on left page ────────────────────────────────────────────────
   final lineColor = img.ColorRgba8(0x9F, 0xA8, 0xDA, 140);
@@ -100,10 +126,14 @@ img.Image _generateIcon(int size) {
     final lx2 = spine - s * 0.03;
     final thickness = i == 1 ? 3 : 2;
     for (int t = 0; t < thickness; t++) {
-      img.drawLine(image,
-          x1: lx1.round(), y1: (ly + t).round(),
-          x2: lx2.round(), y2: (ly + t).round(),
-          color: lineColor);
+      img.drawLine(
+        image,
+        x1: lx1.round(),
+        y1: (ly + t).round(),
+        x2: lx2.round(),
+        y2: (ly + t).round(),
+        color: lineColor,
+      );
     }
   }
 
@@ -114,10 +144,14 @@ img.Image _generateIcon(int size) {
     final lx2 = right - s * 0.045 - (i * s * 0.004);
     final thickness = i == 1 ? 3 : 2;
     for (int t = 0; t < thickness; t++) {
-      img.drawLine(image,
-          x1: lx1.round(), y1: (ly + t).round(),
-          x2: lx2.round(), y2: (ly + t).round(),
-          color: lineColor);
+      img.drawLine(
+        image,
+        x1: lx1.round(),
+        y1: (ly + t).round(),
+        x2: lx2.round(),
+        y2: (ly + t).round(),
+        color: lineColor,
+      );
     }
   }
 
@@ -125,32 +159,60 @@ img.Image _generateIcon(int size) {
   final acX = (cx + bookW * 0.26).round();
   final acY = (cy + bookH * 0.30).round();
   final acR = (s * 0.085).round();
-  img.fillCircle(image, x: acX, y: acY, radius: acR,
-      color: img.ColorRgba8(0xFF, 0x8A, 0x65, 242));
+  img.fillCircle(
+    image,
+    x: acX,
+    y: acY,
+    radius: acR,
+    color: img.ColorRgba8(0xFF, 0x8A, 0x65, 242),
+  );
 
   // Checkmark inside circle
   final ck = s * 0.04;
-  _drawLine(image,
-      (acX - ck * 0.5).round(), acY.round(),
-      (acX - ck * 0.1).round(), (acY + ck * 0.6).round(),
-      0xFF, 0xFF, 0xFF, 255, (s * 0.025).round());
-  _drawLine(image,
-      (acX - ck * 0.1).round(), (acY + ck * 0.6).round(),
-      (acX + ck * 0.7).round(), (acY - ck * 0.5).round(),
-      0xFF, 0xFF, 0xFF, 255, (s * 0.025).round());
+  _drawLine(
+    image,
+    (acX - ck * 0.5).round(),
+    acY.round(),
+    (acX - ck * 0.1).round(),
+    (acY + ck * 0.6).round(),
+    0xFF,
+    0xFF,
+    0xFF,
+    255,
+    (s * 0.025).round(),
+  );
+  _drawLine(
+    image,
+    (acX - ck * 0.1).round(),
+    (acY + ck * 0.6).round(),
+    (acX + ck * 0.7).round(),
+    (acY - ck * 0.5).round(),
+    0xFF,
+    0xFF,
+    0xFF,
+    255,
+    (s * 0.025).round(),
+  );
 
   // ── Teal bookmark ribbon top-right ────────────────────────────────────────
   final bmX = right - s * 0.05;
   final bmW = s * 0.075;
   final bmTop = top - s * 0.08;
   final bmH = s * 0.14;
-  _fillPoly(image, [
-    _P(bmX - bmW, bmTop),
-    _P(bmX, bmTop),
-    _P(bmX, bmTop + bmH),
-    _P(bmX - bmW / 2, bmTop + bmH * 0.78),
-    _P(bmX - bmW, bmTop + bmH),
-  ], 0x00, 0x89, 0x7B, 220);
+  _fillPoly(
+    image,
+    [
+      _P(bmX - bmW, bmTop),
+      _P(bmX, bmTop),
+      _P(bmX, bmTop + bmH),
+      _P(bmX - bmW / 2, bmTop + bmH * 0.78),
+      _P(bmX - bmW, bmTop + bmH),
+    ],
+    0x00,
+    0x89,
+    0x7B,
+    220,
+  );
 
   return image;
 }
@@ -176,8 +238,7 @@ bool _inRoundedRect(int px, int py, int size, double r) {
 
 double _lerp(num a, num b, double t) => a + (b - a) * t;
 
-void _fillPoly(img.Image image, List<_P> poly,
-    int r, int g, int b, int a) {
+void _fillPoly(img.Image image, List<_P> poly, int r, int g, int b, int a) {
   final minY = poly.map((p) => p.y).reduce(math.min).floor();
   final maxY = poly.map((p) => p.y).reduce(math.max).ceil();
 
@@ -204,13 +265,21 @@ void _fillPoly(img.Image image, List<_P> poly,
   }
 }
 
-void _drawLine(img.Image image, int x1, int y1, int x2, int y2,
-    int r, int g, int b, int a, [int thickness = 1]) {
+void _drawLine(
+  img.Image image,
+  int x1,
+  int y1,
+  int x2,
+  int y2,
+  int r,
+  int g,
+  int b,
+  int a, [
+  int thickness = 1,
+]) {
   final color = img.ColorRgba8(r, g, b, a);
   for (int t = 0; t < thickness; t++) {
-    img.drawLine(image,
-        x1: x1, y1: y1 + t, x2: x2, y2: y2 + t, color: color);
-    img.drawLine(image,
-        x1: x1 + t, y1: y1, x2: x2 + t, y2: y2, color: color);
+    img.drawLine(image, x1: x1, y1: y1 + t, x2: x2, y2: y2 + t, color: color);
+    img.drawLine(image, x1: x1 + t, y1: y1, x2: x2 + t, y2: y2, color: color);
   }
 }

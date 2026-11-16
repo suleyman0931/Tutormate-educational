@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 
-/// A beautiful empty-state widget with an icon, title, message, and
+/// A refined empty-state widget with a layered icon, title, message, and
 /// optional call-to-action button.
 class EmptyState extends StatelessWidget {
   const EmptyState({
@@ -20,11 +20,11 @@ class EmptyState extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final colorScheme = theme.colorScheme;
+    final ThemeData theme = Theme.of(context);
+    final ColorScheme colorScheme = theme.colorScheme;
 
     return Center(
-      child: Padding(
+      child: SingleChildScrollView(
         padding: const EdgeInsets.all(32),
         child: Column(
           mainAxisSize: MainAxisSize.min,
@@ -33,20 +33,36 @@ class EmptyState extends StatelessWidget {
               width: 96,
               height: 96,
               decoration: BoxDecoration(
-                color: colorScheme.primaryContainer.withValues(alpha: 0.5),
-                shape: BoxShape.circle,
+                borderRadius: BorderRadius.circular(30),
+                gradient: LinearGradient(
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
+                  colors: [
+                    colorScheme.primaryContainer.withValues(alpha: 0.9),
+                    colorScheme.secondaryContainer.withValues(alpha: 0.55),
+                  ],
+                ),
+                border: Border.all(
+                  color: colorScheme.primary.withValues(alpha: 0.08),
+                ),
               ),
-              child: Icon(
-                icon,
-                size: 48,
-                color: colorScheme.primary,
+              child: Center(
+                child: Container(
+                  width: 58,
+                  height: 58,
+                  decoration: BoxDecoration(
+                    color: colorScheme.surface.withValues(alpha: 0.6),
+                    borderRadius: BorderRadius.circular(19),
+                  ),
+                  child: Icon(icon, size: 29, color: colorScheme.primary),
+                ),
               ),
             ),
             const SizedBox(height: 24),
             Text(
               title,
               style: theme.textTheme.titleMedium?.copyWith(
-                fontWeight: FontWeight.w600,
+                fontWeight: FontWeight.w700,
               ),
               textAlign: TextAlign.center,
             ),
@@ -55,14 +71,15 @@ class EmptyState extends StatelessWidget {
               message,
               style: theme.textTheme.bodyMedium?.copyWith(
                 color: colorScheme.onSurfaceVariant,
+                height: 1.5,
               ),
               textAlign: TextAlign.center,
             ),
             if (actionLabel != null && onAction != null) ...[
               const SizedBox(height: 24),
-              ElevatedButton.icon(
+              FilledButton.icon(
                 onPressed: onAction,
-                icon: const Icon(Icons.add),
+                icon: const Icon(Icons.add_rounded, size: 20),
                 label: Text(actionLabel!),
               ),
             ],

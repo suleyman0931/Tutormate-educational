@@ -3,7 +3,9 @@ import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../../app/theme/app_colors.dart';
 import '../../../core/services/security_service.dart';
+import 'widgets/pin_keypad.dart';
 
 /// Screen for setting up a new PIN.
 ///
@@ -17,16 +19,16 @@ class PinSetupScreen extends ConsumerStatefulWidget {
 
 class _PinSetupScreenState extends ConsumerState<PinSetupScreen> {
   static const int _pinLength = 4;
-  final List<String> _digits = [];
+  final List<String> _digits = <String>[];
   String? _firstPin;
   bool _confirming = false;
   String? _error;
 
-  String get _title =>
-      _confirming ? 'Confirm PIN' : 'Enter New PIN';
+  String get _title => _confirming ? 'Confirm your PIN' : 'Choose a PIN';
 
-  String get _subtitle =>
-      _confirming ? 'Re-enter to confirm' : 'Choose a 4-digit PIN';
+  String get _subtitle => _confirming
+      ? 'Enter the same 4-digit PIN again'
+      : 'This PIN will unlock TutorMate';
 
   void _onDigit(String d) {
     if (_digits.length >= _pinLength) return;
@@ -77,147 +79,128 @@ class _PinSetupScreenState extends ConsumerState<PinSetupScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final colorScheme = Theme.of(context).colorScheme;
+    final ThemeData theme = Theme.of(context);
+    final ColorScheme colorScheme = theme.colorScheme;
 
     return Scaffold(
       appBar: AppBar(title: const Text('Set PIN')),
       body: SafeArea(
-        child: Column(
-          children: [
-            const Spacer(),
-            Text(_title,
-                style: Theme.of(context)
-                    .textTheme
-                    .titleLarge
-                    ?.copyWith(fontWeight: FontWeight.w700)),
-            const SizedBox(height: 4),
-            Text(_subtitle,
-                style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                      color: colorScheme.onSurfaceVariant,
-                    )),
-            const SizedBox(height: 32),
-
-            // PIN dots
-            Row(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: List.generate(_pinLength, (i) {
-                final filled = i < _digits.length;
-                return AnimatedContainer(
-                  duration: const Duration(milliseconds: 150),
-                  margin: const EdgeInsets.symmetric(horizontal: 12),
-                  width: 18,
-                  height: 18,
-                  decoration: BoxDecoration(
-                    shape: BoxShape.circle,
-                    color: filled
-                        ? colorScheme.primary
-                        : colorScheme.surfaceContainerHighest,
-                    border: Border.all(
-                      color: filled
-                          ? Colors.transparent
-                          : colorScheme.outline,
-                      width: 1.5,
-                    ),
+        child: LayoutBuilder(
+          builder: (context, constraints) => SingleChildScrollView(
+            child: ConstrainedBox(
+              constraints: BoxConstraints(minHeight: constraints.maxHeight),
+              child: IntrinsicHeight(
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 32),
+                  child: Column(
+                    children: [
+                      const Spacer(),
+                      const _BrandBadge(),
+                      const SizedBox(height: 20),
+                      Text(
+                        _title,
+                        style: theme.textTheme.headlineSmall?.copyWith(
+                          fontWeight: FontWeight.w700,
+                          letterSpacing: -0.3,
+                        ),
+                        textAlign: TextAlign.center,
+                      ),
+                      const SizedBox(height: 6),
+                      Text(
+                        _subtitle,
+                        style: theme.textTheme.bodyMedium?.copyWith(
+                          color: colorScheme.onSurfaceVariant,
+                        ),
+                        textAlign: TextAlign.center,
+                      ),
+                      const SizedBox(height: 16),
+                      _StepChip(confirming: _confirming),
+                      const SizedBox(height: 28),
+                      PinDots(
+                        length: _pinLength,
+                        filled: _digits.length,
+                        error: _error != null,
+                      ),
+                      const SizedBox(height: 18),
+                      SizedBox(
+                        height: 24,
+                        child: AnimatedOpacity(
+                          duration: const Duration(milliseconds: 200),
+                          opacity: _error != null ? 1.0 : 0.0,
+                          child: Text(
+                            _error ?? '',
+                            style: theme.textTheme.bodySmall?.copyWith(
+                              color: colorScheme.error,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                        ),
+                      ),
+                      const Spacer(),
+                      PinKeypad(onDigit: _onDigit, onDelete: _onDelete),
+                      const SizedBox(height: 20),
+                    ],
                   ),
-                );
-              }),
-            ),
-
-            const SizedBox(height: 16),
-            AnimatedOpacity(
-              duration: const Duration(milliseconds: 200),
-              opacity: _error != null ? 1.0 : 0.0,
-              child: Text(
-                _error ?? '',
-                style: TextStyle(color: colorScheme.error, fontSize: 13),
+                ),
               ),
             ),
-
-            const Spacer(),
-
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 48),
-              child: _Keypad(
-                onDigit: _onDigit,
-                onDelete: _onDelete,
-              ),
-            ),
-            const SizedBox(height: 24),
-          ],
+          ),
         ),
       ),
     );
   }
 }
 
-class _Keypad extends StatelessWidget {
-  const _Keypad({required this.onDigit, required this.onDelete});
-  final ValueChanged<String> onDigit;
-  final VoidCallback onDelete;
-
-  static const _keys = [
-    ['1', '2', '3'],
-    ['4', '5', '6'],
-    ['7', '8', '9'],
-  ];
+class _BrandBadge extends StatelessWidget {
+  const _BrandBadge();
 
   @override
   Widget build(BuildContext context) {
-    return Column(
-      children: [
-        ..._keys.map((row) => Row(
-              children: row
-                  .map((d) => Expanded(
-                      child: _KeyBtn(d, () => onDigit(d))))
-                  .toList(),
-            )),
-        Row(
-          children: [
-            const Expanded(child: SizedBox()),
-            Expanded(child: _KeyBtn('0', () => onDigit('0'))),
-            Expanded(
-              child: _KeyBtn.icon(Icons.backspace_outlined, onDelete),
-            ),
-          ],
-        ),
-      ],
+    return Container(
+      width: 72,
+      height: 72,
+      decoration: BoxDecoration(
+        gradient: AppColors.heroGradient,
+        borderRadius: BorderRadius.circular(22),
+        boxShadow: [
+          BoxShadow(
+            color: AppColors.primary.withValues(alpha: 0.28),
+            blurRadius: 18,
+            offset: const Offset(0, 8),
+          ),
+        ],
+      ),
+      child: const Icon(
+        Icons.lock_outline_rounded,
+        color: Colors.white,
+        size: 32,
+      ),
     );
   }
 }
 
-class _KeyBtn extends StatelessWidget {
-  const _KeyBtn(this.label, this.onTap) : icon = null;
-  const _KeyBtn.icon(this.icon, this.onTap) : label = '';
+class _StepChip extends StatelessWidget {
+  const _StepChip({required this.confirming});
 
-  final String label;
-  final VoidCallback onTap;
-  final IconData? icon;
+  final bool confirming;
 
   @override
   Widget build(BuildContext context) {
-    final colorScheme = Theme.of(context).colorScheme;
-    return Padding(
-      padding: const EdgeInsets.all(6),
-      child: Material(
-        color: colorScheme.surfaceContainerHighest,
-        borderRadius: BorderRadius.circular(12),
-        child: InkWell(
-          onTap: onTap,
-          borderRadius: BorderRadius.circular(12),
-          child: SizedBox(
-            height: 60,
-            child: Center(
-              child: icon != null
-                  ? Icon(icon, size: 24, color: colorScheme.onSurface)
-                  : Text(
-                      label,
-                      style: Theme.of(context)
-                          .textTheme
-                          .headlineSmall
-                          ?.copyWith(fontWeight: FontWeight.w500),
-                    ),
-            ),
-          ),
+    final ThemeData theme = Theme.of(context);
+    final ColorScheme colorScheme = theme.colorScheme;
+
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 5),
+      decoration: BoxDecoration(
+        color: colorScheme.primaryContainer.withValues(alpha: 0.5),
+        borderRadius: BorderRadius.circular(20),
+      ),
+      child: Text(
+        confirming ? 'Step 2 of 2' : 'Step 1 of 2',
+        style: theme.textTheme.labelSmall?.copyWith(
+          color: colorScheme.primary,
+          fontWeight: FontWeight.w700,
+          letterSpacing: 0.4,
         ),
       ),
     );

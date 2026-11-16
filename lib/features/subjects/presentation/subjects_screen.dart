@@ -28,9 +28,9 @@ class SubjectsScreen extends ConsumerWidget {
             );
           }
           return ListView.separated(
-            padding: const EdgeInsets.all(12),
+            padding: const EdgeInsets.fromLTRB(16, 12, 16, 96),
             itemCount: subjects.length,
-            separatorBuilder: (_, _) => const SizedBox(height: 4),
+            separatorBuilder: (_, _) => const SizedBox(height: 8),
             itemBuilder: (context, index) {
               final subject = subjects[index];
               return _SubjectTile(subject: subject);
@@ -77,7 +77,7 @@ class _SubjectTile extends ConsumerWidget {
     return Card(
       margin: EdgeInsets.zero,
       child: ListTile(
-        leading: const Icon(Icons.label_outline),
+        leading: const Icon(Icons.label_outline_rounded),
         title: Text(subject.name),
         trailing: Row(
           mainAxisSize: MainAxisSize.min,

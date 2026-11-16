@@ -162,10 +162,9 @@ GoRouter buildRouter() {
         builder: (context, state) {
           final bookId = int.tryParse(state.pathParameters['bookId'] ?? '');
           final page = int.tryParse(state.uri.queryParameters['page'] ?? '');
-          final encodedText = state.uri.queryParameters['text'];
-          final selectedText = encodedText != null
-              ? Uri.decodeComponent(encodedText)
-              : null;
+          final selectedText = state.extra is String
+              ? state.extra as String
+              : state.uri.queryParameters['text'];
           return AiChatScreen(
             initialBookId: bookId,
             initialPage: page,
@@ -237,43 +236,68 @@ class _MainShell extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final ColorScheme colorScheme = Theme.of(context).colorScheme;
+    final bool isDark = Theme.of(context).brightness == Brightness.dark;
+
     return Scaffold(
       body: navigationShell,
-      bottomNavigationBar: NavigationBar(
-        selectedIndex: navigationShell.currentIndex,
-        onDestinationSelected: (index) {
-          navigationShell.goBranch(
-            index,
-            initialLocation: index == navigationShell.currentIndex,
-          );
-        },
-        destinations: const [
-          NavigationDestination(
-            icon: Icon(Icons.home_outlined),
-            selectedIcon: Icon(Icons.home_rounded),
-            label: 'Home',
+      bottomNavigationBar: SafeArea(
+        top: false,
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(16, 8, 16, 12),
+          child: DecoratedBox(
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(24),
+              border: Border.all(color: colorScheme.outlineVariant),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withValues(alpha: isDark ? 0.35 : 0.07),
+                  blurRadius: 24,
+                  offset: const Offset(0, 10),
+                ),
+              ],
+            ),
+            child: ClipRRect(
+              borderRadius: BorderRadius.circular(24),
+              child: NavigationBar(
+                selectedIndex: navigationShell.currentIndex,
+                onDestinationSelected: (index) {
+                  navigationShell.goBranch(
+                    index,
+                    initialLocation: index == navigationShell.currentIndex,
+                  );
+                },
+                destinations: const [
+                  NavigationDestination(
+                    icon: Icon(Icons.home_outlined),
+                    selectedIcon: Icon(Icons.home_rounded),
+                    label: 'Home',
+                  ),
+                  NavigationDestination(
+                    icon: Icon(Icons.library_books_outlined),
+                    selectedIcon: Icon(Icons.library_books_rounded),
+                    label: 'Library',
+                  ),
+                  NavigationDestination(
+                    icon: Icon(Icons.auto_awesome_outlined),
+                    selectedIcon: Icon(Icons.auto_awesome_rounded),
+                    label: 'AI Tutor',
+                  ),
+                  NavigationDestination(
+                    icon: Icon(Icons.sticky_note_2_outlined),
+                    selectedIcon: Icon(Icons.sticky_note_2_rounded),
+                    label: 'Notes',
+                  ),
+                  NavigationDestination(
+                    icon: Icon(Icons.settings_outlined),
+                    selectedIcon: Icon(Icons.settings_rounded),
+                    label: 'Settings',
+                  ),
+                ],
+              ),
+            ),
           ),
-          NavigationDestination(
-            icon: Icon(Icons.library_books_outlined),
-            selectedIcon: Icon(Icons.library_books_rounded),
-            label: 'Library',
-          ),
-          NavigationDestination(
-            icon: Icon(Icons.auto_awesome_outlined),
-            selectedIcon: Icon(Icons.auto_awesome_rounded),
-            label: 'AI Tutor',
-          ),
-          NavigationDestination(
-            icon: Icon(Icons.sticky_note_2_outlined),
-            selectedIcon: Icon(Icons.sticky_note_2_rounded),
-            label: 'Notes',
-          ),
-          NavigationDestination(
-            icon: Icon(Icons.settings_outlined),
-            selectedIcon: Icon(Icons.settings_rounded),
-            label: 'Settings',
-          ),
-        ],
+        ),
       ),
     );
   }

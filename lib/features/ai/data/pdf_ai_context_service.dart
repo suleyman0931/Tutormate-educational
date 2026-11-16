@@ -98,7 +98,6 @@ class _Chunk {
 class PdfAiContextService {
   static const String _cacheFolder = 'ai_text_cache';
   static const int _cacheVersion = 1;
-  static const int _libraryPageBudget = 320;
   static const int _libraryPerBookPageBudget = 60;
 
   final Map<int, _CachedBookText> _memoryCache = {};

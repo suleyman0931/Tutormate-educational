@@ -117,9 +117,9 @@ class _NotesScreenState extends ConsumerState<NotesScreen> {
                   );
                 }
                 return ListView.separated(
-                  padding: const EdgeInsets.all(12),
+                  padding: const EdgeInsets.fromLTRB(16, 12, 16, 96),
                   itemCount: filtered.length,
-                  separatorBuilder: (_, _) => const SizedBox(height: 4),
+                  separatorBuilder: (_, _) => const SizedBox(height: 8),
                   itemBuilder: (context, index) {
                     final note = filtered[index];
                     return _NoteCard(note: note);

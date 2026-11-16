@@ -2,7 +2,9 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../app/theme/app_colors.dart';
 import '../../../core/services/security_service.dart';
+import 'widgets/pin_keypad.dart';
 
 /// Full-screen lock screen shown when PIN lock is enabled.
 ///
@@ -16,7 +18,7 @@ class LockScreen extends ConsumerStatefulWidget {
 }
 
 class _LockScreenState extends ConsumerState<LockScreen> {
-  final List<String> _enteredDigits = [];
+  final List<String> _enteredDigits = <String>[];
   static const int _pinLength = 4;
   bool _shaking = false;
   String? _error;
@@ -87,193 +89,132 @@ class _LockScreenState extends ConsumerState<LockScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final colorScheme = Theme.of(context).colorScheme;
-    final biometricEnabled =
-        ref.watch(securitySettingsProvider).biometricEnabled;
+    final ThemeData theme = Theme.of(context);
+    final ColorScheme colorScheme = theme.colorScheme;
+    final bool biometricEnabled = ref
+        .watch(securitySettingsProvider)
+        .biometricEnabled;
 
     return Scaffold(
       backgroundColor: colorScheme.surface,
       body: SafeArea(
-        child: Column(
-          children: [
-            const Spacer(),
-            // App icon / title
-            Icon(Icons.menu_book_rounded,
-                size: 64, color: colorScheme.primary),
-            const SizedBox(height: 8),
-            Text(
-              'TutorMate',
-              style: Theme.of(context).textTheme.headlineSmall?.copyWith(
-                    fontWeight: FontWeight.w700,
-                  ),
-            ),
-            const SizedBox(height: 4),
-            Text(
-              'Enter your PIN',
-              style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                    color: colorScheme.onSurfaceVariant,
-                  ),
-            ),
-            const SizedBox(height: 32),
-
-            // PIN dots
-            AnimatedContainer(
-              duration: const Duration(milliseconds: 50),
-              transform: _shaking
-                  ? (Matrix4.identity()..translateByDouble(10.0, 0, 0, 1))
-                  : Matrix4.identity(),
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: List.generate(_pinLength, (i) {
-                  final filled = i < _enteredDigits.length;
-                  return AnimatedContainer(
-                    duration: const Duration(milliseconds: 150),
-                    margin: const EdgeInsets.symmetric(horizontal: 10),
-                    width: 18,
-                    height: 18,
-                    decoration: BoxDecoration(
-                      shape: BoxShape.circle,
-                      color: filled
-                          ? (_shaking
-                              ? colorScheme.error
-                              : colorScheme.primary)
-                          : colorScheme.surfaceContainerHighest,
-                      border: Border.all(
-                        color: filled
-                            ? Colors.transparent
-                            : colorScheme.outline,
-                        width: 1.5,
+        child: LayoutBuilder(
+          builder: (context, constraints) => SingleChildScrollView(
+            child: ConstrainedBox(
+              constraints: BoxConstraints(minHeight: constraints.maxHeight),
+              child: IntrinsicHeight(
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 32),
+                  child: Column(
+                    children: [
+                      const Spacer(),
+                      const _BrandBadge(),
+                      const SizedBox(height: 20),
+                      Text(
+                        'TutorMate',
+                        style: theme.textTheme.headlineSmall?.copyWith(
+                          fontWeight: FontWeight.w700,
+                          letterSpacing: -0.4,
+                        ),
                       ),
-                    ),
-                  );
-                }),
+                      const SizedBox(height: 6),
+                      Text(
+                        'Enter your PIN to continue',
+                        style: theme.textTheme.bodyMedium?.copyWith(
+                          color: colorScheme.onSurfaceVariant,
+                        ),
+                      ),
+                      const SizedBox(height: 30),
+                      AnimatedContainer(
+                        duration: const Duration(milliseconds: 50),
+                        transform: _shaking
+                            ? (Matrix4.identity()
+                                ..translateByDouble(10.0, 0, 0, 1))
+                            : Matrix4.identity(),
+                        child: PinDots(
+                          length: _pinLength,
+                          filled: _enteredDigits.length,
+                          error: _shaking,
+                        ),
+                      ),
+                      const SizedBox(height: 18),
+                      SizedBox(
+                        height: 24,
+                        child: AnimatedOpacity(
+                          duration: const Duration(milliseconds: 200),
+                          opacity: _error != null ? 1.0 : 0.0,
+                          child: Text(
+                            _error ?? '',
+                            style: theme.textTheme.bodySmall?.copyWith(
+                              color: colorScheme.error,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                        ),
+                      ),
+                      const Spacer(),
+                      PinKeypad(
+                        onDigit: _onDigitTap,
+                        onDelete: _onDelete,
+                        onBiometric: biometricEnabled ? _tryBiometric : null,
+                      ),
+                      const SizedBox(height: 20),
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          Icon(
+                            Icons.lock_outline_rounded,
+                            size: 13,
+                            color: colorScheme.onSurfaceVariant,
+                          ),
+                          const SizedBox(width: 5),
+                          Flexible(
+                            child: Text(
+                              'Your library is protected',
+                              style: theme.textTheme.labelSmall?.copyWith(
+                                color: colorScheme.onSurfaceVariant,
+                              ),
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 8),
+                    ],
+                  ),
+                ),
               ),
             ),
-
-            const SizedBox(height: 16),
-
-            // Error message
-            AnimatedOpacity(
-              duration: const Duration(milliseconds: 200),
-              opacity: _error != null ? 1.0 : 0.0,
-              child: Text(
-                _error ?? '',
-                style: TextStyle(
-                    color: colorScheme.error, fontSize: 13),
-              ),
-            ),
-
-            const Spacer(),
-
-            // Keypad
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 48),
-              child: _Keypad(
-                onDigit: _onDigitTap,
-                onDelete: _onDelete,
-                onBiometric:
-                    biometricEnabled ? _tryBiometric : null,
-              ),
-            ),
-
-            const SizedBox(height: 24),
-          ],
+          ),
         ),
       ),
     );
   }
 }
 
-// ── Numeric keypad ────────────────────────────────────────────────────────────
-
-class _Keypad extends StatelessWidget {
-  const _Keypad({
-    required this.onDigit,
-    required this.onDelete,
-    this.onBiometric,
-  });
-
-  final ValueChanged<String> onDigit;
-  final VoidCallback onDelete;
-  final VoidCallback? onBiometric;
-
-  static const _keys = [
-    ['1', '2', '3'],
-    ['4', '5', '6'],
-    ['7', '8', '9'],
-  ];
+class _BrandBadge extends StatelessWidget {
+  const _BrandBadge();
 
   @override
   Widget build(BuildContext context) {
-    return Column(
-      children: [
-        ..._keys.map((row) => _buildRow(context, row)),
-        // Bottom row: biometric | 0 | delete
-        Row(
-          children: [
-            Expanded(
-              child: onBiometric != null
-                  ? _KeyButton.withIcon(
-                      Icons.fingerprint, onBiometric!, context)
-                  : const SizedBox.shrink(),
-            ),
-            Expanded(child: _KeyButton('0', () => onDigit('0'), context)),
-            Expanded(
-              child: _KeyButton.withIcon(
-                  Icons.backspace_outlined, onDelete, context),
-            ),
-          ],
-        ),
-      ],
-    );
-  }
-
-  Widget _buildRow(BuildContext context, List<String> digits) {
-    return Row(
-      children: digits
-          .map((d) => Expanded(
-              child: _KeyButton(d, () => onDigit(d), context)))
-          .toList(),
-    );
-  }
-}
-
-class _KeyButton extends StatelessWidget {
-  const _KeyButton(this.label, this.onTap, this.context) : icon = null;
-
-  const _KeyButton.withIcon(IconData this.icon, this.onTap, this.context)
-      : label = '';
-
-  final String label;
-  final VoidCallback onTap;
-  final BuildContext context;
-  final IconData? icon;
-
-  @override
-  Widget build(BuildContext ctx) {
-    final colorScheme = Theme.of(ctx).colorScheme;
-    return Padding(
-      padding: const EdgeInsets.all(6),
-      child: Material(
-        color: colorScheme.surfaceContainerHighest,
-        borderRadius: BorderRadius.circular(12),
-        child: InkWell(
-          onTap: onTap,
-          borderRadius: BorderRadius.circular(12),
-          child: SizedBox(
-            height: 60,
-            child: Center(
-              child: icon != null
-                  ? Icon(icon, size: 24, color: colorScheme.onSurface)
-                  : Text(
-                      label,
-                      style: Theme.of(ctx).textTheme.headlineSmall?.copyWith(
-                            fontWeight: FontWeight.w500,
-                          ),
-                    ),
-            ),
+    return Container(
+      width: 84,
+      height: 84,
+      decoration: BoxDecoration(
+        gradient: AppColors.heroGradient,
+        borderRadius: BorderRadius.circular(26),
+        boxShadow: [
+          BoxShadow(
+            color: AppColors.primary.withValues(alpha: 0.3),
+            blurRadius: 22,
+            offset: const Offset(0, 10),
           ),
-        ),
+        ],
+      ),
+      child: const Icon(
+        Icons.auto_stories_rounded,
+        color: Colors.white,
+        size: 38,
       ),
     );
   }

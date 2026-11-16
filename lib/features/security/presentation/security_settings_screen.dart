@@ -3,7 +3,10 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../../app/router.dart';
+import '../../../app/theme/app_colors.dart';
 import '../../../core/services/security_service.dart';
+import '../../../core/widgets/confirm_dialog.dart';
+import '../../../core/widgets/settings_section.dart';
 
 /// Security settings: PIN toggle, biometric toggle, and auto-lock timer.
 class SecuritySettingsScreen extends ConsumerWidget {
@@ -11,145 +14,158 @@ class SecuritySettingsScreen extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final settings = ref.watch(securitySettingsProvider);
+    final SecuritySettings settings = ref.watch(securitySettingsProvider);
+    final ColorScheme colorScheme = Theme.of(context).colorScheme;
 
     return Scaffold(
       appBar: AppBar(title: const Text('App Lock')),
       body: ListView(
+        padding: const EdgeInsets.fromLTRB(16, 8, 16, 32),
         children: [
-          // ── PIN lock ────────────────────────────────────────────────────
-          _SectionHeader('PIN Lock'),
-          SwitchListTile(
-            secondary: const Icon(Icons.lock_outlined),
-            title: const Text('Enable PIN Lock'),
-            subtitle: Text(
-              settings.pinEnabled
-                  ? 'App is protected with a PIN'
-                  : 'Secure the app with a 4-digit PIN',
-            ),
-            value: settings.pinEnabled,
-            onChanged: (enabled) async {
-              if (enabled) {
-                // Navigate to PIN setup
-                context.push(AppRoutes.pinSetup);
-              } else {
-                // Confirm and disable
-                final confirmed = await _confirmDisable(context);
-                if (confirmed) {
-                  await ref
-                      .read(securitySettingsProvider.notifier)
-                      .removePin();
-                }
-              }
-            },
+          _StatusCard(settings: settings),
+
+          SettingsSection(
+            title: 'PIN Lock',
+            children: [
+              SettingsSwitchTile(
+                icon: Icons.pin_outlined,
+                color: colorScheme.primary,
+                title: 'Enable PIN Lock',
+                subtitle: settings.pinEnabled
+                    ? 'App is protected with a 4-digit PIN'
+                    : 'Secure the app with a 4-digit PIN',
+                value: settings.pinEnabled,
+                onChanged: (enabled) async {
+                  if (enabled) {
+                    context.push(AppRoutes.pinSetup);
+                    return;
+                  }
+                  final confirmed = await showConfirmDialog(
+                    context,
+                    title: 'Disable PIN Lock?',
+                    message:
+                        'This will remove your PIN and disable app protection.',
+                    confirmLabel: 'Disable',
+                    destructive: true,
+                  );
+                  if (confirmed) {
+                    await ref
+                        .read(securitySettingsProvider.notifier)
+                        .removePin();
+                  }
+                },
+              ),
+              if (settings.pinEnabled)
+                SettingsActionTile(
+                  icon: Icons.password_rounded,
+                  color: AppColors.violet,
+                  title: 'Change PIN',
+                  subtitle: 'Set a new 4-digit PIN',
+                  onTap: () => context.push(AppRoutes.pinSetup),
+                ),
+            ],
           ),
-          if (settings.pinEnabled) ...[
-            ListTile(
-              leading: const Icon(Icons.edit_outlined),
-              title: const Text('Change PIN'),
-              onTap: () => context.push(AppRoutes.pinSetup),
-              trailing: const Icon(Icons.chevron_right),
-            ),
-          ],
 
-          const Divider(height: 1),
+          SettingsSection(
+            title: 'Biometrics',
+            children: [
+              if (!settings.biometricAvailable)
+                SettingsActionTile(
+                  icon: Icons.fingerprint_rounded,
+                  color: colorScheme.outline,
+                  title: 'Biometric Unavailable',
+                  subtitle:
+                      'This device does not support biometric authentication.',
+                  enabled: false,
+                  onTap: null,
+                )
+              else
+                SettingsSwitchTile(
+                  icon: Icons.fingerprint_rounded,
+                  color: colorScheme.secondary,
+                  title: 'Fingerprint / Face ID',
+                  subtitle: 'Unlock with biometrics instead of your PIN',
+                  value: settings.biometricEnabled,
+                  onChanged: settings.pinEnabled
+                      ? (enabled) => ref
+                            .read(securitySettingsProvider.notifier)
+                            .setBiometric(enabled)
+                      : null,
+                ),
+            ],
+          ),
 
-          // ── Biometric ───────────────────────────────────────────────────
-          _SectionHeader('Biometric'),
-          if (!settings.biometricAvailable)
-            const ListTile(
-              leading: Icon(Icons.fingerprint, color: Colors.grey),
-              title: Text('Biometric Unavailable',
-                  style: TextStyle(color: Colors.grey)),
-              subtitle: Text(
-                  'This device does not support biometric authentication.'),
-            )
-          else
-            SwitchListTile(
-              secondary: const Icon(Icons.fingerprint),
-              title: const Text('Use Fingerprint / Face ID'),
-              subtitle: const Text(
-                  'Unlock with biometrics instead of PIN'),
-              value: settings.biometricEnabled,
-              onChanged: settings.pinEnabled
-                  ? (enabled) async {
-                      await ref
-                          .read(securitySettingsProvider.notifier)
-                          .setBiometric(enabled);
-                    }
-                  : null, // disabled unless PIN is set
-            ),
-
-          const Divider(height: 1),
-
-          // ── Auto-lock ───────────────────────────────────────────────────
-          _SectionHeader('Auto-Lock'),
-          if (!settings.pinEnabled)
-            const ListTile(
-              leading: Icon(Icons.timer_outlined, color: Colors.grey),
-              title: Text('Auto-Lock', style: TextStyle(color: Colors.grey)),
-              subtitle: Text('Enable PIN lock first to configure auto-lock.'),
-            )
-          else
-            ListTile(
-              leading: const Icon(Icons.timer_outlined),
-              title: const Text('Lock After'),
-              subtitle: Text(_autoLockLabel(settings.autoLockMinutes)),
-              trailing: const Icon(Icons.chevron_right),
-              onTap: () => _showAutoLockPicker(context, ref, settings),
-            ),
-        ],
-      ),
-    );
-  }
-
-  Future<bool> _confirmDisable(BuildContext context) async {
-    final result = await showDialog<bool>(
-      context: context,
-      builder: (_) => AlertDialog(
-        title: const Text('Disable PIN Lock?'),
-        content: const Text(
-            'This will remove your PIN and disable app protection.'),
-        actions: [
-          TextButton(
-              onPressed: () => Navigator.of(context).pop(false),
-              child: const Text('Cancel')),
-          FilledButton(
-            onPressed: () => Navigator.of(context).pop(true),
-            style: FilledButton.styleFrom(
-                backgroundColor: Theme.of(context).colorScheme.error),
-            child: const Text('Disable'),
+          SettingsSection(
+            title: 'Auto-Lock',
+            children: [
+              if (!settings.pinEnabled)
+                SettingsActionTile(
+                  icon: Icons.timer_outlined,
+                  color: colorScheme.outline,
+                  title: 'Auto-Lock',
+                  subtitle: 'Enable PIN lock first to configure auto-lock.',
+                  enabled: false,
+                  onTap: null,
+                )
+              else
+                SettingsActionTile(
+                  icon: Icons.timer_outlined,
+                  color: AppColors.amber,
+                  title: 'Lock After',
+                  subtitle: _autoLockLabel(settings.autoLockMinutes),
+                  onTap: () => _showAutoLockPicker(context, ref, settings),
+                ),
+            ],
           ),
         ],
       ),
     );
-    return result ?? false;
   }
 
   void _showAutoLockPicker(
-      BuildContext context, WidgetRef ref, SecuritySettings settings) {
-    const options = [1, 2, 5, 10, 15, 30, 0];
+    BuildContext context,
+    WidgetRef ref,
+    SecuritySettings settings,
+  ) {
+    const List<int> options = <int>[1, 2, 5, 10, 15, 30, 0];
+    final ThemeData theme = Theme.of(context);
+
     showModalBottomSheet<void>(
       context: context,
       builder: (ctx) => SafeArea(
-        child: ListView(
-          shrinkWrap: true,
-          children: options.map((m) {
-            final label = _autoLockLabel(m);
-            return ListTile(
-              title: Text(label),
-              trailing: m == settings.autoLockMinutes
-                  ? Icon(Icons.check,
-                      color: Theme.of(ctx).colorScheme.primary)
-                  : null,
-              onTap: () {
-                ref
-                    .read(securitySettingsProvider.notifier)
-                    .setAutoLock(m);
-                Navigator.of(ctx).pop();
-              },
-            );
-          }).toList(),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Padding(
+              padding: const EdgeInsets.fromLTRB(20, 4, 20, 14),
+              child: Text(
+                'Lock after',
+                style: theme.textTheme.titleMedium?.copyWith(
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+            ),
+            ...options.map((minutes) {
+              final bool selected = minutes == settings.autoLockMinutes;
+              return ListTile(
+                leading: Icon(
+                  selected
+                      ? Icons.radio_button_checked_rounded
+                      : Icons.radio_button_unchecked_rounded,
+                  color: selected
+                      ? theme.colorScheme.primary
+                      : theme.colorScheme.onSurfaceVariant,
+                ),
+                title: Text(_autoLockLabel(minutes)),
+                onTap: () {
+                  ref
+                      .read(securitySettingsProvider.notifier)
+                      .setAutoLock(minutes);
+                  Navigator.of(ctx).pop();
+                },
+              );
+            }),
+          ],
         ),
       ),
     );
@@ -157,26 +173,83 @@ class SecuritySettingsScreen extends ConsumerWidget {
 
   static String _autoLockLabel(int minutes) {
     if (minutes == 0) return 'Never';
-    if (minutes == 1) return '1 minute';
-    return '$minutes minutes';
+    if (minutes == 1) return 'After 1 minute';
+    return 'After $minutes minutes';
   }
 }
 
-class _SectionHeader extends StatelessWidget {
-  const _SectionHeader(this.title);
-  final String title;
+// ── Status card ───────────────────────────────────────────────────────────────
+
+class _StatusCard extends StatelessWidget {
+  const _StatusCard({required this.settings});
+
+  final SecuritySettings settings;
 
   @override
   Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(16, 20, 16, 4),
-      child: Text(
-        title.toUpperCase(),
-        style: Theme.of(context).textTheme.labelSmall?.copyWith(
-              color: Theme.of(context).colorScheme.primary,
-              fontWeight: FontWeight.w700,
-              letterSpacing: 0.8,
+    final ThemeData theme = Theme.of(context);
+    final ColorScheme colorScheme = theme.colorScheme;
+    final bool enabled = settings.pinEnabled;
+    final Color accent = enabled ? colorScheme.secondary : colorScheme.outline;
+
+    return Container(
+      padding: const EdgeInsets.all(18),
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(20),
+        gradient: LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: enabled
+              ? <Color>[
+                  colorScheme.primaryContainer.withValues(alpha: 0.65),
+                  colorScheme.secondaryContainer.withValues(alpha: 0.4),
+                ]
+              : <Color>[
+                  colorScheme.surfaceContainerLow,
+                  colorScheme.surfaceContainerHigh,
+                ],
+        ),
+        border: Border.all(color: accent.withValues(alpha: 0.18)),
+      ),
+      child: Row(
+        children: [
+          Container(
+            width: 54,
+            height: 54,
+            decoration: BoxDecoration(
+              color: accent.withValues(alpha: 0.14),
+              borderRadius: BorderRadius.circular(16),
             ),
+            child: Icon(
+              enabled ? Icons.shield_rounded : Icons.shield_outlined,
+              color: accent,
+              size: 28,
+            ),
+          ),
+          const SizedBox(width: 14),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  enabled ? 'App lock is on' : 'App lock is off',
+                  style: theme.textTheme.titleMedium?.copyWith(
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+                const SizedBox(height: 3),
+                Text(
+                  enabled
+                      ? 'TutorMate unlocks with your PIN'
+                      : 'Your library is not protected yet',
+                  style: theme.textTheme.bodySmall?.copyWith(
+                    color: colorScheme.onSurfaceVariant,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
       ),
     );
   }

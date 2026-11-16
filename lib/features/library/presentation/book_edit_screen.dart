@@ -68,7 +68,9 @@ class _BookEditScreenState extends ConsumerState<BookEditScreen> {
     });
 
     try {
-      await ref.read(bookRepositoryProvider).updateBookMetadata(
+      await ref
+          .read(bookRepositoryProvider)
+          .updateBookMetadata(
             bookId: widget.book.id,
             title: _titleController.text.trim(),
             category: _category,
@@ -132,13 +134,15 @@ class _BookEditScreenState extends ConsumerState<BookEditScreen> {
                       labelText: 'Book Title *',
                       prefixIcon: Icon(Icons.title),
                     ),
-                    validator: (v) =>
-                        (v == null || v.trim().isEmpty) ? 'Title is required' : null,
+                    validator: (v) => (v == null || v.trim().isEmpty)
+                        ? 'Title is required'
+                        : null,
                   ),
                   const SizedBox(height: 16),
 
                   // ── Category ────────────────────────────────────────────────
                   DropdownButtonFormField<BookCategory>(
+                    isExpanded: true,
                     initialValue: _category,
                     decoration: const InputDecoration(
                       labelText: 'Category *',
@@ -158,6 +162,7 @@ class _BookEditScreenState extends ConsumerState<BookEditScreen> {
 
                   // ── Grade ────────────────────────────────────────────────────
                   DropdownButtonFormField<int>(
+                    isExpanded: true,
                     initialValue: _grade,
                     decoration: const InputDecoration(
                       labelText: 'Grade *',
@@ -178,6 +183,7 @@ class _BookEditScreenState extends ConsumerState<BookEditScreen> {
                   // ── Subject ──────────────────────────────────────────────────
                   subjectsAsync.when(
                     data: (subjects) => DropdownButtonFormField<int>(
+                      isExpanded: true,
                       initialValue: subjects.any((s) => s.id == _subjectId)
                           ? _subjectId
                           : null,
@@ -195,7 +201,8 @@ class _BookEditScreenState extends ConsumerState<BookEditScreen> {
                       validator: (v) =>
                           v == null ? 'Please select a subject' : null,
                     ),
-                    loading: () => const Center(child: CircularProgressIndicator()),
+                    loading: () =>
+                        const Center(child: CircularProgressIndicator()),
                     error: (e, _) => Text('Error loading subjects: $e'),
                   ),
                   const SizedBox(height: 16),

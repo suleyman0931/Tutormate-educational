@@ -103,7 +103,8 @@ class _AiChatScreenState extends ConsumerState<AiChatScreen> {
         ? '\n\nThe reader opened page $_focusPage, so I will prioritise that page.'
         : '';
     return _ChatMessage(
-      text: 'Hi! I am TutorMate AI. I read the PDFs in your library and help '
+      text:
+          'Hi! I am TutorMate AI. I read the PDFs in your library and help '
           'you understand them.\n\nChoose a book above, or search your whole '
           'library, then ask me anything: explanations, summaries, '
           'definitions, or practice questions.$pageNote',
@@ -128,8 +129,9 @@ class _AiChatScreenState extends ConsumerState<AiChatScreen> {
           IconButton(
             icon: const Icon(Icons.delete_sweep_outlined),
             tooltip: 'New conversation',
-            onPressed:
-                _messages.length > 1 && !_sending ? _confirmClearChat : null,
+            onPressed: _messages.length > 1 && !_sending
+                ? _confirmClearChat
+                : null,
           ),
         ],
       ),
@@ -147,7 +149,8 @@ class _AiChatScreenState extends ConsumerState<AiChatScreen> {
             return EmptyState(
               icon: Icons.auto_awesome_outlined,
               title: 'No PDFs yet',
-              message: 'Import documents (PDF, Word, Text) into your library, then come back to ask '
+              message:
+                  'Import documents (PDF, Word, Text) into your library, then come back to ask '
                   'the AI Tutor questions about it.',
               actionLabel: 'Import PDF',
               onAction: () => context.go(AppRoutes.library),
@@ -158,9 +161,7 @@ class _AiChatScreenState extends ConsumerState<AiChatScreen> {
           return Column(
             children: [
               _buildScopeBar(books, selectedBook),
-              Expanded(
-                child: _buildChatList(settings),
-              ),
+              Expanded(child: _buildChatList(settings)),
               _buildComposer(),
             ],
           );
@@ -193,7 +194,10 @@ class _AiChatScreenState extends ConsumerState<AiChatScreen> {
               borderRadius: BorderRadius.circular(16),
               onTap: _sending ? null : () => _pickScope(books),
               child: Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 14,
+                  vertical: 12,
+                ),
                 child: Row(
                   children: [
                     Container(
@@ -257,7 +261,7 @@ class _AiChatScreenState extends ConsumerState<AiChatScreen> {
             ),
           ),
         ),
-        
+
         // Language selector
         Padding(
           padding: const EdgeInsets.fromLTRB(12, 4, 12, 8),
@@ -283,17 +287,16 @@ class _AiChatScreenState extends ConsumerState<AiChatScreen> {
                       items: _languages.map((lang) {
                         return DropdownMenuItem<String>(
                           value: lang,
-                          child: Text(
-                            lang,
-                            style: theme.textTheme.bodyMedium,
-                          ),
+                          child: Text(lang, style: theme.textTheme.bodyMedium),
                         );
                       }).toList(),
-                      onChanged: _sending ? null : (value) {
-                        if (value != null) {
-                          setState(() => _selectedLanguage = value);
-                        }
-                      },
+                      onChanged: _sending
+                          ? null
+                          : (value) {
+                              if (value != null) {
+                                setState(() => _selectedLanguage = value);
+                              }
+                            },
                     ),
                   ),
                 ],
@@ -326,8 +329,8 @@ class _AiChatScreenState extends ConsumerState<AiChatScreen> {
                     child: Text(
                       'Answer from',
                       style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                            fontWeight: FontWeight.w600,
-                          ),
+                        fontWeight: FontWeight.w600,
+                      ),
                     ),
                   ),
                 ),
@@ -417,7 +420,10 @@ class _AiChatScreenState extends ConsumerState<AiChatScreen> {
           children: [
             Row(
               children: [
-                Icon(Icons.key_outlined, color: colorScheme.onTertiaryContainer),
+                Icon(
+                  Icons.key_outlined,
+                  color: colorScheme.onTertiaryContainer,
+                ),
                 const SizedBox(width: 10),
                 Expanded(
                   child: Text(
@@ -488,8 +494,9 @@ class _AiChatScreenState extends ConsumerState<AiChatScreen> {
     }
 
     final isUser = message.isUser;
-    final bubbleColor =
-        isUser ? colorScheme.primary : colorScheme.surfaceContainerHighest;
+    final bubbleColor = isUser
+        ? colorScheme.primary
+        : colorScheme.surfaceContainerHighest;
     final textColor = isUser ? colorScheme.onPrimary : colorScheme.onSurface;
 
     return Align(
@@ -557,7 +564,7 @@ class _AiChatScreenState extends ConsumerState<AiChatScreen> {
                   backgroundColor: Colors.black12,
                 ),
                 blockquote: theme.textTheme.bodyMedium?.copyWith(
-                  color: textColor.withOpacity(0.7),
+                  color: textColor.withValues(alpha: 0.7),
                   fontStyle: FontStyle.italic,
                 ),
               ),
@@ -635,9 +642,9 @@ class _AiChatScreenState extends ConsumerState<AiChatScreen> {
             child: Text(
               'Try asking',
               style: Theme.of(context).textTheme.labelMedium?.copyWith(
-                    color: Theme.of(context).colorScheme.onSurfaceVariant,
-                    fontWeight: FontWeight.w600,
-                  ),
+                color: Theme.of(context).colorScheme.onSurfaceVariant,
+                fontWeight: FontWeight.w600,
+              ),
             ),
           ),
           Wrap(
@@ -727,8 +734,10 @@ class _AiChatScreenState extends ConsumerState<AiChatScreen> {
                     onSubmitted: (_) => _send(),
                     decoration: const InputDecoration(
                       hintText: 'Ask about your PDFs...',
-                      contentPadding:
-                          EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                      contentPadding: EdgeInsets.symmetric(
+                        horizontal: 16,
+                        vertical: 12,
+                      ),
                     ),
                   ),
                 ),
@@ -776,9 +785,9 @@ class _AiChatScreenState extends ConsumerState<AiChatScreen> {
 
     final books = ref.read(allBooksProvider).valueOrNull ?? const <Book>[];
     if (books.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Import a PDF first')),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('Import a PDF first')));
       return;
     }
 
@@ -808,7 +817,9 @@ class _AiChatScreenState extends ConsumerState<AiChatScreen> {
       if (!mounted) return;
       setState(() => _status = 'Asking Gemini...');
 
-      final answer = await ref.read(geminiServiceProvider).generateAnswer(
+      final answer = await ref
+          .read(geminiServiceProvider)
+          .generateAnswer(
             apiKey: settings.apiKey,
             model: settings.model,
             pdfContext: aiContext.text,
@@ -819,9 +830,7 @@ class _AiChatScreenState extends ConsumerState<AiChatScreen> {
 
       if (!mounted) return;
       setState(() {
-        _messages.add(
-          _ChatMessage(text: answer, sources: aiContext.sources),
-        );
+        _messages.add(_ChatMessage(text: answer, sources: aiContext.sources));
       });
     } on AiException catch (error) {
       if (!mounted) return;
@@ -851,10 +860,7 @@ class _AiChatScreenState extends ConsumerState<AiChatScreen> {
     for (final message in _messages) {
       if (message.isIntro || message.isError) continue;
       turns.add(
-        AiChatTurn(
-          role: message.isUser ? 'user' : 'model',
-          text: message.text,
-        ),
+        AiChatTurn(role: message.isUser ? 'user' : 'model', text: message.text),
       );
     }
     // Drop the current question; it is supplied separately with the context.

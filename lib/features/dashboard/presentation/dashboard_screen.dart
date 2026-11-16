@@ -1,22 +1,19 @@
 import 'dart:io';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../../app/router.dart';
+import '../../../app/theme/app_colors.dart';
 import '../../../core/database/app_database.dart';
 import '../../../core/widgets/section_header.dart';
 import '../../../core/widgets/stat_card.dart';
 import '../../library/data/library_providers.dart';
 
-/// The Home dashboard screen.
-///
-/// Shows:
-/// - Library statistics (stat cards)
-/// - Continue Reading card for the last opened book
-/// - Recently Opened horizontal scroll
-/// - Quick Actions grid
+/// The Home dashboard: greeting header, search, library overview,
+/// continue reading, recently opened books, and quick actions.
 class DashboardScreen extends ConsumerStatefulWidget {
   const DashboardScreen({super.key});
 
@@ -40,117 +37,186 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
     FocusScope.of(context).unfocus();
   }
 
+  String get _greeting {
+    final int hour = DateTime.now().hour;
+    if (hour < 12) return 'Good morning';
+    if (hour < 17) return 'Good afternoon';
+    return 'Good evening';
+  }
+
   @override
   Widget build(BuildContext context) {
-    final colorScheme = Theme.of(context).colorScheme;
-    final searching = _query.trim().isNotEmpty;
+    final bool searching = _query.trim().isNotEmpty;
+
     return Scaffold(
       body: RefreshIndicator(
         onRefresh: () async {},
+        edgeOffset: 120,
         child: CustomScrollView(
+          physics: const AlwaysScrollableScrollPhysics(),
           slivers: [
-            // Beautiful gradient header
-            SliverAppBar(
-              expandedHeight: 140,
-              floating: false,
-              pinned: true,
-              flexibleSpace: FlexibleSpaceBar(
-                background: Container(
-                  decoration: BoxDecoration(
-                    gradient: LinearGradient(
-                      begin: Alignment.topLeft,
-                      end: Alignment.bottomRight,
-                      colors: [
-                        colorScheme.primary,
-                        colorScheme.tertiary,
-                      ],
-                    ),
-                  ),
-                  child: SafeArea(
-                    child: Padding(
-                      padding: const EdgeInsets.fromLTRB(20, 16, 20, 8),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Row(
-                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                            children: [
-                              const Text(
-                                'TutorMate',
-                                style: TextStyle(
-                                  color: Colors.white,
-                                  fontSize: 26,
-                                  fontWeight: FontWeight.w800,
-                                  letterSpacing: 0.5,
-                                ),
-                              ),
-                              IconButton(
-                                icon: const Icon(Icons.bookmark_border,
-                                    color: Colors.white),
-                                tooltip: 'Bookmarks',
-                                onPressed: () =>
-                                    context.push(AppRoutes.bookmarks),
-                              ),
-                            ],
-                          ),
-                          const Text(
-                            'Your smart reading companion 📚',
-                            style: TextStyle(
-                              color: Colors.white70,
-                              fontSize: 14,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ),
-                ),
-              ),
+            _buildHeader(context),
+            SliverPadding(
+              padding: const EdgeInsets.fromLTRB(16, 16, 16, 0),
+              sliver: SliverToBoxAdapter(child: _buildSearchField(context)),
             ),
-            SliverList(
-              delegate: SliverChildListDelegate([
-                _buildSearchBar(colorScheme),
-                if (searching)
-                  _SearchResultsSection(query: _query.trim())
-                else ...[
-                  _StatsSection(),
-                  _ContinueReadingSection(),
-                  _RecentlyOpenedSection(),
-                  _QuickActionsSection(),
-                ],
-                const SizedBox(height: 24),
-              ]),
-            ),
+            if (searching)
+              SliverToBoxAdapter(child: _SearchResultsSection(query: _query.trim()))
+            else ...[
+              const SliverToBoxAdapter(child: _StatsSection()),
+              const SliverToBoxAdapter(child: _ContinueReadingSection()),
+              const SliverToBoxAdapter(child: _RecentlyOpenedSection()),
+              const SliverToBoxAdapter(child: _QuickActionsSection()),
+            ],
+            const SliverToBoxAdapter(child: SizedBox(height: 32)),
           ],
         ),
       ),
     );
   }
 
-  Widget _buildSearchBar(ColorScheme colorScheme) {
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(12, 12, 12, 0),
+  Widget _buildHeader(BuildContext context) {
+    final double topInset = MediaQuery.paddingOf(context).top;
+
+    return SliverAppBar(
+      pinned: true,
+      expandedHeight: 208,
+      backgroundColor: AppColors.primaryDark,
+      foregroundColor: Colors.white,
+      surfaceTintColor: Colors.transparent,
+      elevation: 0,
+      scrolledUnderElevation: 0,
+      systemOverlayStyle: SystemUiOverlayStyle.light,
+      title: const Text(
+        'TutorMate',
+        style: TextStyle(
+          color: Colors.white,
+          fontSize: 18,
+          fontWeight: FontWeight.w700,
+          letterSpacing: -0.2,
+        ),
+      ),
+      actions: [
+        IconButton(
+          icon: const Icon(Icons.bookmark_border_rounded, color: Colors.white),
+          tooltip: 'Bookmarks',
+          onPressed: () => context.push(AppRoutes.bookmarks),
+        ),
+        const SizedBox(width: 8),
+      ],
+      flexibleSpace: FlexibleSpaceBar(
+        collapseMode: CollapseMode.parallax,
+        background: DecoratedBox(
+          decoration: const BoxDecoration(gradient: AppColors.heroGradient),
+          child: Stack(
+            children: [
+              Positioned(
+                right: -48,
+                top: -56,
+                child: _glow(180, Colors.white.withValues(alpha: 0.06)),
+              ),
+              Positioned(
+                right: 36,
+                bottom: -40,
+                child: _glow(120, AppColors.secondary.withValues(alpha: 0.22)),
+              ),
+              Positioned(
+                left: -36,
+                bottom: 28,
+                child: _glow(96, Colors.white.withValues(alpha: 0.04)),
+              ),
+              Padding(
+                padding: EdgeInsets.fromLTRB(
+                  20,
+                  topInset + kToolbarHeight + 4,
+                  20,
+                  20,
+                ),
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.end,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      _greeting,
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontSize: 25,
+                        fontWeight: FontWeight.w700,
+                        letterSpacing: -0.6,
+                        height: 1.1,
+                      ),
+                    ),
+                    const SizedBox(height: 6),
+                    Text(
+                      'Ready for your next chapter?',
+                      style: TextStyle(
+                        color: Colors.white.withValues(alpha: 0.74),
+                        fontSize: 13.5,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _glow(double size, Color color) {
+    return Container(
+      width: size,
+      height: size,
+      decoration: BoxDecoration(shape: BoxShape.circle, color: color),
+    );
+  }
+
+  Widget _buildSearchField(BuildContext context) {
+    final ThemeData theme = Theme.of(context);
+    final ColorScheme colorScheme = theme.colorScheme;
+    final bool isDark = theme.brightness == Brightness.dark;
+
+    return Container(
+      decoration: BoxDecoration(
+        color: theme.cardTheme.color ?? colorScheme.surfaceContainerLowest,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: colorScheme.outlineVariant),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: isDark ? 0.25 : 0.04),
+            blurRadius: 18,
+            offset: const Offset(0, 6),
+          ),
+        ],
+      ),
       child: TextField(
         controller: _searchController,
         textInputAction: TextInputAction.search,
         onChanged: (value) => setState(() => _query = value),
+        style: theme.textTheme.bodyMedium,
         decoration: InputDecoration(
-          hintText: 'Search books by title, subject, or grade...',
-          prefixIcon: const Icon(Icons.search),
+          hintText: 'Search books, subjects, or grades',
+          hintStyle: theme.textTheme.bodyMedium?.copyWith(
+            color: colorScheme.onSurfaceVariant.withValues(alpha: 0.75),
+          ),
+          prefixIcon: Icon(
+            Icons.search_rounded,
+            color: colorScheme.onSurfaceVariant,
+            size: 21,
+          ),
           suffixIcon: _query.isEmpty
               ? null
               : IconButton(
-                  icon: const Icon(Icons.clear),
+                  icon: const Icon(Icons.close_rounded, size: 19),
                   tooltip: 'Clear search',
                   onPressed: _clearSearch,
                 ),
-          filled: true,
-          fillColor: colorScheme.surfaceContainerHighest.withValues(alpha: 0.4),
-          border: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(14),
-            borderSide: BorderSide.none,
-          ),
-          contentPadding: const EdgeInsets.symmetric(vertical: 14),
+          filled: false,
+          border: InputBorder.none,
+          enabledBorder: InputBorder.none,
+          focusedBorder: InputBorder.none,
+          contentPadding: const EdgeInsets.symmetric(vertical: 15),
         ),
       ),
     );
@@ -171,16 +237,16 @@ class _SearchResultsSection extends ConsumerWidget {
 
     return booksAsync.when(
       data: (books) {
-        final q = query.toLowerCase();
+        final String q = query.toLowerCase();
         final results = books.where((book) {
-          final subject = subjectMap[book.subjectId] ?? '';
+          final String subject = subjectMap[book.subjectId] ?? '';
           return book.title.toLowerCase().contains(q) ||
               subject.toLowerCase().contains(q) ||
               'grade ${book.grade}'.contains(q);
         }).toList()
-          ..sort((a, b) => a.title.toLowerCase().compareTo(
-                b.title.toLowerCase(),
-              ));
+          ..sort(
+            (a, b) => a.title.toLowerCase().compareTo(b.title.toLowerCase()),
+          );
 
         if (results.isEmpty) {
           return Padding(
@@ -189,22 +255,24 @@ class _SearchResultsSection extends ConsumerWidget {
               children: [
                 Icon(
                   Icons.search_off_rounded,
-                  size: 56,
+                  size: 52,
                   color: Theme.of(context)
                       .colorScheme
                       .onSurfaceVariant
-                      .withValues(alpha: 0.5),
+                      .withValues(alpha: 0.45),
                 ),
-                const SizedBox(height: 12),
+                const SizedBox(height: 14),
                 Text(
                   'No books match "$query"',
                   style: Theme.of(context).textTheme.titleMedium,
                   textAlign: TextAlign.center,
                 ),
-                const SizedBox(height: 4),
+                const SizedBox(height: 6),
                 Text(
                   'Try a different title, subject, or grade.',
-                  style: Theme.of(context).textTheme.bodySmall,
+                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                        color: Theme.of(context).colorScheme.onSurfaceVariant,
+                      ),
                   textAlign: TextAlign.center,
                 ),
               ],
@@ -216,11 +284,18 @@ class _SearchResultsSection extends ConsumerWidget {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             SectionHeader(title: 'Search Results (${results.length})'),
-            for (final book in results)
-              _SearchResultTile(
-                book: book,
-                subjectName: subjectMap[book.subjectId],
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 16),
+              child: Column(
+                children: [
+                  for (final book in results)
+                    _SearchResultTile(
+                      book: book,
+                      subjectName: subjectMap[book.subjectId],
+                    ),
+                ],
               ),
+            ),
           ],
         );
       },
@@ -244,45 +319,72 @@ class _SearchResultTile extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final colorScheme = Theme.of(context).colorScheme;
+    final ThemeData theme = Theme.of(context);
+    final ColorScheme colorScheme = theme.colorScheme;
     final subtitleParts = [
       'Grade ${book.grade}',
       if (subjectName != null && subjectName!.isNotEmpty) subjectName!,
     ];
 
     return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+      padding: const EdgeInsets.only(bottom: 8),
       child: Material(
-        color: colorScheme.surfaceContainerHighest.withValues(alpha: 0.25),
-        borderRadius: BorderRadius.circular(12),
+        color: theme.cardTheme.color ?? colorScheme.surfaceContainerLowest,
         clipBehavior: Clip.antiAlias,
-        child: ListTile(
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(14),
+          side: BorderSide(color: colorScheme.outlineVariant),
+        ),
+        child: InkWell(
           onTap: () {
             ref.read(booksDaoProvider).updateLastOpened(book.id);
             context.push(AppRoutes.readerFor(book.id));
           },
-          leading: ClipRRect(
-            borderRadius: BorderRadius.circular(6),
-            child: SizedBox(
-              width: 40,
-              height: 54,
-              child: _buildCover(colorScheme),
+          child: Padding(
+            padding: const EdgeInsets.all(10),
+            child: Row(
+              children: [
+                ClipRRect(
+                  borderRadius: BorderRadius.circular(7),
+                  child: SizedBox(
+                    width: 42,
+                    height: 56,
+                    child: _buildCover(colorScheme),
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        book.title,
+                        style: theme.textTheme.titleSmall?.copyWith(
+                          fontWeight: FontWeight.w600,
+                        ),
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                      const SizedBox(height: 3),
+                      Text(
+                        subtitleParts.join(' · '),
+                        style: theme.textTheme.labelSmall?.copyWith(
+                          color: colorScheme.onSurfaceVariant,
+                        ),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(width: 8),
+                Icon(
+                  Icons.chevron_right_rounded,
+                  color: colorScheme.onSurfaceVariant,
+                  size: 20,
+                ),
+              ],
             ),
-          ),
-          title: Text(
-            book.title,
-            maxLines: 2,
-            overflow: TextOverflow.ellipsis,
-          ),
-          subtitle: Text(
-            subtitleParts.join(' • '),
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-          ),
-          trailing: IconButton(
-            icon: const Icon(Icons.info_outline),
-            tooltip: 'Book details',
-            onPressed: () => context.push(AppRoutes.bookDetailsFor(book.id)),
           ),
         ),
       ),
@@ -291,16 +393,16 @@ class _SearchResultTile extends ConsumerWidget {
 
   Widget _buildCover(ColorScheme colorScheme) {
     if (book.coverPath != null && book.coverPath!.isNotEmpty) {
-      final file = File(book.coverPath!);
+      final File file = File(book.coverPath!);
       if (file.existsSync()) {
         return Image.file(file, fit: BoxFit.cover);
       }
     }
     return ColoredBox(
-      color: colorScheme.primaryContainer.withValues(alpha: 0.4),
+      color: colorScheme.primaryContainer.withValues(alpha: 0.5),
       child: Icon(
-        Icons.menu_book_rounded,
-        size: 22,
+        Icons.auto_stories_rounded,
+        size: 20,
         color: colorScheme.primary.withValues(alpha: 0.6),
       ),
     );
@@ -310,6 +412,8 @@ class _SearchResultTile extends ConsumerWidget {
 // ── Statistics ────────────────────────────────────────────────────────────────
 
 class _StatsSection extends ConsumerWidget {
+  const _StatsSection();
+
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final statsAsync = ref.watch(libraryStatsProvider);
@@ -317,57 +421,58 @@ class _StatsSection extends ConsumerWidget {
 
     return statsAsync.when(
       data: (stats) {
-        final bookmarkCount =
-            bookmarkCountAsync.valueOrNull ?? 0;
+        final int bookmarkCount = bookmarkCountAsync.valueOrNull ?? 0;
         return Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             const SectionHeader(title: 'Library Overview'),
             Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 12),
-              child: GridView.count(
-                crossAxisCount: 3,
-                crossAxisSpacing: 8,
-                mainAxisSpacing: 8,
-                childAspectRatio: 0.95,
+              padding: const EdgeInsets.symmetric(horizontal: 16),
+              child: GridView(
                 shrinkWrap: true,
                 physics: const NeverScrollableScrollPhysics(),
+                gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                  crossAxisCount: 3,
+                  crossAxisSpacing: 10,
+                  mainAxisSpacing: 10,
+                  mainAxisExtent: 108,
+                ),
                 children: [
                   StatCard(
                     icon: Icons.library_books_rounded,
                     value: stats.totalBooks,
                     label: 'Total Books',
-                    color: const Color(0xFF1A237E),
+                    color: AppColors.primary,
                   ),
                   StatCard(
                     icon: Icons.menu_book_rounded,
                     value: stats.studentBooks,
                     label: 'Student Books',
-                    color: const Color(0xFF00897B),
+                    color: AppColors.secondary,
                   ),
                   StatCard(
-                    icon: Icons.person_outline,
+                    icon: Icons.person_outline_rounded,
                     value: stats.teacherGuides,
                     label: 'Teacher Guides',
-                    color: const Color(0xFF6A1B9A),
+                    color: AppColors.violet,
                   ),
                   StatCard(
-                    icon: Icons.note_outlined,
+                    icon: Icons.notes_rounded,
                     value: stats.shortNotes,
                     label: 'Short Notes',
-                    color: const Color(0xFFFF6F00),
+                    color: AppColors.amber,
                   ),
                   StatCard(
                     icon: Icons.folder_outlined,
                     value: stats.otherBooks,
                     label: 'Other Books',
-                    color: const Color(0xFF37474F),
+                    color: AppColors.slate,
                   ),
                   StatCard(
                     icon: Icons.bookmark_rounded,
                     value: bookmarkCount,
                     label: 'Bookmarks',
-                    color: const Color(0xFFE53935),
+                    color: AppColors.rose,
                   ),
                 ],
               ),
@@ -387,6 +492,8 @@ class _StatsSection extends ConsumerWidget {
 // ── Continue Reading ──────────────────────────────────────────────────────────
 
 class _ContinueReadingSection extends ConsumerWidget {
+  const _ContinueReadingSection();
+
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final lastBookAsync = ref.watch(lastOpenedBookProvider);
@@ -397,10 +504,9 @@ class _ContinueReadingSection extends ConsumerWidget {
         return Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            const SizedBox(height: 16),
             const SectionHeader(title: 'Continue Reading'),
             Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 12),
+              padding: const EdgeInsets.symmetric(horizontal: 16),
               child: _ContinueReadingCard(book: book),
             ),
           ],
@@ -414,140 +520,171 @@ class _ContinueReadingSection extends ConsumerWidget {
 
 class _ContinueReadingCard extends ConsumerWidget {
   const _ContinueReadingCard({required this.book});
+
   final Book book;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final progressAsync = ref.watch(progressByBookProvider(book.id));
     final subjectMapAsync = ref.watch(subjectMapProvider);
-    final theme = Theme.of(context);
-    final colorScheme = theme.colorScheme;
-
-    final subjectName = subjectMapAsync.valueOrNull?[book.subjectId] ?? '';
+    final ThemeData theme = Theme.of(context);
+    final String subjectName =
+        subjectMapAsync.valueOrNull?[book.subjectId] ?? '';
+    final bool isDark = theme.brightness == Brightness.dark;
 
     return Container(
       decoration: BoxDecoration(
-        gradient: LinearGradient(
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-          colors: [
-            colorScheme.primaryContainer.withValues(alpha: 0.3),
-            colorScheme.primaryContainer.withValues(alpha: 0.1),
-          ],
-        ),
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(
-          color: colorScheme.primary.withValues(alpha: 0.1),
-        ),
+        borderRadius: BorderRadius.circular(22),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withValues(alpha: 0.06),
-            blurRadius: 12,
-            offset: const Offset(0, 4),
+            color: AppColors.primary.withValues(alpha: isDark ? 0.35 : 0.22),
+            blurRadius: 24,
+            offset: const Offset(0, 10),
           ),
         ],
       ),
-      child: Material(
-        color: Colors.transparent,
-        child: InkWell(
-          onTap: () {
-            ref.read(booksDaoProvider).updateLastOpened(book.id);
-            context.push(AppRoutes.readerFor(book.id));
-          },
-          borderRadius: BorderRadius.circular(16),
-          child: Padding(
-            padding: const EdgeInsets.all(16),
-            child: Row(
-              children: [
-                // Cover
-                Container(
-                  width: 70,
-                  height: 95,
-                  decoration: BoxDecoration(
-                    borderRadius: BorderRadius.circular(10),
-                    color: colorScheme.primaryContainer.withValues(alpha: 0.4),
-                    boxShadow: [
-                      BoxShadow(
-                        color: Colors.black.withValues(alpha: 0.15),
-                        blurRadius: 8,
-                        offset: const Offset(0, 2),
-                      ),
-                    ],
-                  ),
-                  child: ClipRRect(
-                    borderRadius: BorderRadius.circular(10),
-                    child: _buildCover(book, colorScheme),
-                  ),
-                ),
-                const SizedBox(width: 16),
-                // Info
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        book.title,
-                        style: theme.textTheme.titleMedium?.copyWith(
-                          fontWeight: FontWeight.w700,
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(22),
+        child: Material(
+          color: Colors.transparent,
+          child: Ink(
+            decoration: const BoxDecoration(gradient: AppColors.heroGradient),
+            child: InkWell(
+              onTap: () {
+                ref.read(booksDaoProvider).updateLastOpened(book.id);
+                final savedPage = progressAsync.valueOrNull?.currentPage;
+                context.push(
+                  AppRoutes.readerFor(book.id),
+                  extra: savedPage != null && savedPage > 1 ? savedPage : null,
+                );
+              },
+              child: Padding(
+                padding: const EdgeInsets.all(16),
+                child: Row(
+                  children: [
+                    Container(
+                      width: 72,
+                      height: 98,
+                      decoration: BoxDecoration(
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(
+                          color: Colors.white.withValues(alpha: 0.22),
                         ),
-                        maxLines: 2,
-                        overflow: TextOverflow.ellipsis,
-                      ),
-                      const SizedBox(height: 4),
-                      Row(
-                        children: [
-                          _chip(context, 'Grade ${book.grade}'),
-                          const SizedBox(width: 6),
-                          if (subjectName.isNotEmpty)
-                            _chip(context, subjectName),
+                        boxShadow: [
+                          BoxShadow(
+                            color: Colors.black.withValues(alpha: 0.28),
+                            blurRadius: 12,
+                            offset: const Offset(0, 4),
+                          ),
                         ],
                       ),
-                      const SizedBox(height: 10),
-                      // Progress
-                      progressAsync.when(
-                        data: (progress) {
-                          final page = progress?.currentPage ?? 1;
-                          final total = book.totalPages;
-                          final pct = total > 0
-                              ? ((page / total) * 100).toInt()
-                              : 0;
-                          return Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              ClipRRect(
-                                borderRadius: BorderRadius.circular(6),
-                                child: LinearProgressIndicator(
-                                  value: total > 0 ? page / total : 0,
-                                  backgroundColor: colorScheme.surfaceContainerHighest,
-                                  valueColor: AlwaysStoppedAnimation<Color>(
-                                    colorScheme.primary,
-                                  ),
-                                  minHeight: 6,
-                                ),
-                              ),
-                              const SizedBox(height: 4),
-                              Text(
-                                total > 0
-                                    ? 'Page $page of $total  ($pct%)'
-                                    : 'Page $page',
-                                style: theme.textTheme.labelSmall?.copyWith(
-                                  color: colorScheme.onSurfaceVariant,
-                                  fontWeight: FontWeight.w500,
-                                ),
-                              ),
-                            ],
-                          );
-                        },
-                        loading: () => const LinearProgressIndicator(),
-                        error: (_, _) => const SizedBox.shrink(),
+                      child: ClipRRect(
+                        borderRadius: BorderRadius.circular(11),
+                        child: _buildCover(),
                       ),
-                    ],
-                  ),
+                    ),
+                    const SizedBox(width: 15),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            'PICK UP WHERE YOU LEFT OFF',
+                            style: TextStyle(
+                              color: Colors.white.withValues(alpha: 0.55),
+                              fontSize: 9.5,
+                              fontWeight: FontWeight.w700,
+                              letterSpacing: 1.1,
+                            ),
+                          ),
+                          const SizedBox(height: 5),
+                          Text(
+                            book.title,
+                            style: theme.textTheme.titleMedium?.copyWith(
+                              color: Colors.white,
+                              fontWeight: FontWeight.w700,
+                              height: 1.2,
+                            ),
+                            maxLines: 2,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                          const SizedBox(height: 8),
+                          Row(
+                            children: [
+                              _chip('Grade ${book.grade}'),
+                              if (subjectName.isNotEmpty) ...[
+                                const SizedBox(width: 5),
+                                Flexible(child: _chip(subjectName)),
+                              ],
+                            ],
+                          ),
+                          const SizedBox(height: 10),
+                          progressAsync.when(
+                            data: (progress) {
+                              final int page = progress?.currentPage ?? 1;
+                              final int total = book.totalPages;
+                              final double value =
+                                  total > 0 ? (page / total).clamp(0.0, 1.0) : 0;
+                              final int pct = (value * 100).round();
+                              return Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  ClipRRect(
+                                    borderRadius: BorderRadius.circular(4),
+                                    child: LinearProgressIndicator(
+                                      value: value,
+                                      minHeight: 5,
+                                      backgroundColor:
+                                          Colors.white.withValues(alpha: 0.18),
+                                      valueColor: const AlwaysStoppedAnimation<Color>(
+                                        AppColors.accentLight,
+                                      ),
+                                    ),
+                                  ),
+                                  const SizedBox(height: 5),
+                                  Text(
+                                    total > 0
+                                        ? 'Page $page of $total · $pct%'
+                                        : 'Page $page',
+                                    style: TextStyle(
+                                      color: Colors.white.withValues(alpha: 0.68),
+                                      fontSize: 11,
+                                      fontWeight: FontWeight.w500,
+                                    ),
+                                  ),
+                                ],
+                              );
+                            },
+                            loading: () => LinearProgressIndicator(
+                              backgroundColor:
+                                  Colors.white.withValues(alpha: 0.18),
+                              minHeight: 5,
+                            ),
+                            error: (_, _) => const SizedBox.shrink(),
+                          ),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(width: 10),
+                    Container(
+                      width: 42,
+                      height: 42,
+                      decoration: BoxDecoration(
+                        color: Colors.white.withValues(alpha: 0.14),
+                        shape: BoxShape.circle,
+                        border: Border.all(
+                          color: Colors.white.withValues(alpha: 0.16),
+                        ),
+                      ),
+                      child: const Icon(
+                        Icons.play_arrow_rounded,
+                        color: Colors.white,
+                        size: 24,
+                      ),
+                    ),
+                  ],
                 ),
-                const SizedBox(width: 8),
-                Icon(Icons.play_circle_fill_rounded,
-                    size: 40, color: colorScheme.primary),
-              ],
+              ),
             ),
           ),
         ),
@@ -555,33 +692,38 @@ class _ContinueReadingCard extends ConsumerWidget {
     );
   }
 
-  Widget _buildCover(Book book, ColorScheme colorScheme) {
+  Widget _buildCover() {
     if (book.coverPath != null && book.coverPath!.isNotEmpty) {
-      final f = File(book.coverPath!);
-      if (f.existsSync()) {
-        return Image.file(f, fit: BoxFit.cover);
+      final File file = File(book.coverPath!);
+      if (file.existsSync()) {
+        return Image.file(file, fit: BoxFit.cover);
       }
     }
-    return Center(
-      child: Icon(Icons.menu_book_rounded,
-          size: 32, color: colorScheme.primary.withValues(alpha: 0.6)),
+    return ColoredBox(
+      color: AppColors.secondary.withValues(alpha: 0.35),
+      child: const Center(
+        child: Icon(Icons.auto_stories_rounded, color: Colors.white, size: 26),
+      ),
     );
   }
 
-  Widget _chip(BuildContext context, String label) {
+  Widget _chip(String label) {
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+      padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
       decoration: BoxDecoration(
-        color: Theme.of(context)
-            .colorScheme
-            .primaryContainer
-            .withValues(alpha: 0.4),
-        borderRadius: BorderRadius.circular(8),
+        color: Colors.white.withValues(alpha: 0.14),
+        borderRadius: BorderRadius.circular(7),
       ),
-      child: Text(label,
-          style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                fontWeight: FontWeight.w600,
-              )),
+      child: Text(
+        label,
+        style: const TextStyle(
+          color: Colors.white,
+          fontSize: 10,
+          fontWeight: FontWeight.w600,
+        ),
+        maxLines: 1,
+        overflow: TextOverflow.ellipsis,
+      ),
     );
   }
 }
@@ -589,6 +731,8 @@ class _ContinueReadingCard extends ConsumerWidget {
 // ── Recently Opened ───────────────────────────────────────────────────────────
 
 class _RecentlyOpenedSection extends ConsumerWidget {
+  const _RecentlyOpenedSection();
+
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final recentAsync = ref.watch(recentlyOpenedBooksProvider);
@@ -601,17 +745,16 @@ class _RecentlyOpenedSection extends ConsumerWidget {
         return Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            const SizedBox(height: 16),
             SectionHeader(
               title: 'Recently Opened',
               actionLabel: 'See All',
               onAction: () => context.go(AppRoutes.library),
             ),
             SizedBox(
-              height: 190,
+              height: 204,
               child: ListView.builder(
                 scrollDirection: Axis.horizontal,
-                padding: const EdgeInsets.symmetric(horizontal: 12),
+                padding: const EdgeInsets.symmetric(horizontal: 16),
                 itemCount: books.length,
                 itemBuilder: (context, index) {
                   final book = books[index];
@@ -633,73 +776,103 @@ class _RecentlyOpenedSection extends ConsumerWidget {
 
 class _RecentBookCard extends ConsumerWidget {
   const _RecentBookCard({required this.book, this.subjectName});
+
   final Book book;
   final String? subjectName;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final colorScheme = Theme.of(context).colorScheme;
-    return GestureDetector(
-      onTap: () {
-        ref.read(booksDaoProvider).updateLastOpened(book.id);
-        context.push(AppRoutes.readerFor(book.id));
-      },
-      child: Container(
-        width: 120,
-        margin: const EdgeInsets.only(right: 12),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            // Cover
-            Expanded(
-              child: Container(
-                decoration: BoxDecoration(
-                  borderRadius: BorderRadius.circular(12),
-                  gradient: LinearGradient(
-                    begin: Alignment.topLeft,
-                    end: Alignment.bottomRight,
-                    colors: [
-                      colorScheme.primaryContainer.withValues(alpha: 0.4),
-                      colorScheme.primaryContainer.withValues(alpha: 0.2),
+    final ThemeData theme = Theme.of(context);
+    final ColorScheme colorScheme = theme.colorScheme;
+
+    return SizedBox(
+      width: 118,
+      child: Padding(
+        padding: const EdgeInsets.only(right: 12),
+        child: Material(
+          color: Colors.transparent,
+          child: InkWell(
+            borderRadius: BorderRadius.circular(14),
+            onTap: () {
+              ref.read(booksDaoProvider).updateLastOpened(book.id);
+              context.push(AppRoutes.readerFor(book.id));
+            },
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Container(
+                  height: 146,
+                  decoration: BoxDecoration(
+                    borderRadius: BorderRadius.circular(14),
+                    border: Border.all(color: colorScheme.outlineVariant),
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.black.withValues(
+                          alpha: theme.brightness == Brightness.dark ? 0.3 : 0.08,
+                        ),
+                        blurRadius: 12,
+                        offset: const Offset(0, 4),
+                      ),
                     ],
                   ),
-                  boxShadow: [
-                    BoxShadow(
-                      color: Colors.black.withValues(alpha: 0.12),
-                      blurRadius: 8,
-                      offset: const Offset(0, 3),
+                  child: ClipRRect(
+                    borderRadius: BorderRadius.circular(13),
+                    child: Stack(
+                      fit: StackFit.expand,
+                      children: [
+                        _buildCover(colorScheme),
+                        Positioned(
+                          left: 7,
+                          bottom: 7,
+                          child: Container(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 6,
+                              vertical: 2,
+                            ),
+                            decoration: BoxDecoration(
+                              color: Colors.black.withValues(alpha: 0.55),
+                              borderRadius: BorderRadius.circular(5),
+                            ),
+                            child: Text(
+                              'G${book.grade}',
+                              style: const TextStyle(
+                                color: Colors.white,
+                                fontSize: 9.5,
+                                fontWeight: FontWeight.w700,
+                              ),
+                            ),
+                          ),
+                        ),
+                      ],
                     ),
-                  ],
-                ),
-                child: ClipRRect(
-                  borderRadius: BorderRadius.circular(12),
-                  child: _buildCover(colorScheme),
-                ),
-              ),
-            ),
-            const SizedBox(height: 8),
-            Text(
-              book.title,
-              style: Theme.of(context).textTheme.labelMedium?.copyWith(
-                    fontWeight: FontWeight.w600,
                   ),
-              maxLines: 2,
-              overflow: TextOverflow.ellipsis,
-            ),
-            if (subjectName != null)
-              Padding(
-                padding: const EdgeInsets.only(top: 2),
-                child: Text(
-                  subjectName!,
-                  style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                        color: colorScheme.onSurfaceVariant,
-                        fontSize: 11,
-                      ),
-                  maxLines: 1,
+                ),
+                const SizedBox(height: 8),
+                Text(
+                  book.title,
+                  style: theme.textTheme.labelMedium?.copyWith(
+                    fontWeight: FontWeight.w600,
+                    height: 1.25,
+                  ),
+                  maxLines: 2,
                   overflow: TextOverflow.ellipsis,
                 ),
-              ),
-          ],
+                if (subjectName != null && subjectName!.isNotEmpty)
+                  Padding(
+                    padding: const EdgeInsets.only(top: 2),
+                    child: Text(
+                      subjectName!,
+                      style: theme.textTheme.labelSmall?.copyWith(
+                        color: colorScheme.onSurfaceVariant,
+                        fontSize: 10.5,
+                      ),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ),
+              ],
+            ),
+          ),
         ),
       ),
     );
@@ -707,78 +880,83 @@ class _RecentBookCard extends ConsumerWidget {
 
   Widget _buildCover(ColorScheme colorScheme) {
     if (book.coverPath != null && book.coverPath!.isNotEmpty) {
-      final f = File(book.coverPath!);
-      if (f.existsSync()) {
-        return Image.file(f, fit: BoxFit.cover, width: double.infinity);
+      final File file = File(book.coverPath!);
+      if (file.existsSync()) {
+        return Image.file(file, fit: BoxFit.cover);
       }
     }
-    return Center(
-      child: Icon(Icons.menu_book_rounded,
-          size: 36, color: colorScheme.primary.withValues(alpha: 0.6)),
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [
+            colorScheme.primaryContainer.withValues(alpha: 0.9),
+            colorScheme.secondaryContainer.withValues(alpha: 0.55),
+          ],
+        ),
+      ),
+      child: Center(
+        child: Icon(
+          Icons.auto_stories_rounded,
+          size: 34,
+          color: colorScheme.primary.withValues(alpha: 0.55),
+        ),
+      ),
     );
   }
 }
 
 // ── Quick Actions ─────────────────────────────────────────────────────────────
 
-class _QuickActionsSection extends ConsumerWidget {
+class _QuickActionsSection extends StatelessWidget {
+  const _QuickActionsSection();
+
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  Widget build(BuildContext context) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        const SizedBox(height: 16),
         const SectionHeader(title: 'Quick Actions'),
         Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 12),
-          child: GridView.count(
-            crossAxisCount: 2,
-            crossAxisSpacing: 12,
-            mainAxisSpacing: 12,
-            childAspectRatio: 2.6,
+          padding: const EdgeInsets.symmetric(horizontal: 16),
+          child: GridView(
             shrinkWrap: true,
             physics: const NeverScrollableScrollPhysics(),
+            gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+              crossAxisCount: 2,
+              crossAxisSpacing: 10,
+              mainAxisSpacing: 10,
+              mainAxisExtent: 70,
+            ),
             children: [
               _QuickActionTile(
-                icon: Icons.upload_file_outlined,
-                label: 'Import Book',
-                color: const Color(0xFF1A237E),
+                icon: Icons.upload_file_rounded,
+                label: 'Import',
+                color: AppColors.primary,
                 onTap: () => context.push(AppRoutes.library),
               ),
               _QuickActionTile(
-                icon: Icons.auto_awesome_outlined,
+                icon: Icons.auto_awesome_rounded,
                 label: 'AI Tutor',
-                color: const Color(0xFF6A1B9A),
+                color: AppColors.violet,
                 onTap: () => context.go(AppRoutes.ai),
               ),
               _QuickActionTile(
-                icon: Icons.library_books_outlined,
-                label: 'Browse Library',
-                color: const Color(0xFF00897B),
-                onTap: () => context.go(AppRoutes.library),
-              ),
-              _QuickActionTile(
-                icon: Icons.sticky_note_2_outlined,
-                label: 'My Notes',
-                color: const Color(0xFF00897B),
-                onTap: () => context.go(AppRoutes.notes),
-              ),
-              _QuickActionTile(
-                icon: Icons.note_add_outlined,
+                icon: Icons.note_add_rounded,
                 label: 'New Note',
-                color: const Color(0xFFFF6F00),
+                color: AppColors.amber,
                 onTap: () => context.push(AppRoutes.noteEdit),
               ),
               _QuickActionTile(
-                icon: Icons.bookmark_border,
+                icon: Icons.bookmark_rounded,
                 label: 'Bookmarks',
-                color: const Color(0xFFE53935),
+                color: AppColors.rose,
                 onTap: () => context.push(AppRoutes.bookmarks),
               ),
             ],
           ),
         ),
-        const SizedBox(height: 8),
       ],
     );
   }
@@ -799,63 +977,45 @@ class _QuickActionTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final colorScheme = theme.colorScheme;
+    final ThemeData theme = Theme.of(context);
+    final ColorScheme colorScheme = theme.colorScheme;
+
     return Material(
-      color: Colors.transparent,
+      color: theme.cardTheme.color ?? colorScheme.surfaceContainerLowest,
+      clipBehavior: Clip.antiAlias,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(16),
+        side: BorderSide(color: colorScheme.outlineVariant),
+      ),
       child: InkWell(
         onTap: onTap,
-        borderRadius: BorderRadius.circular(14),
-        child: Container(
-          decoration: BoxDecoration(
-            gradient: LinearGradient(
-              begin: Alignment.topLeft,
-              end: Alignment.bottomRight,
-              colors: [
-                color.withValues(alpha: 0.08),
-                color.withValues(alpha: 0.02),
-              ],
-            ),
-            borderRadius: BorderRadius.circular(14),
-            border: Border.all(
-              color: color.withValues(alpha: 0.15),
-              width: 1,
-            ),
-            boxShadow: [
-              BoxShadow(
-                color: color.withValues(alpha: 0.06),
-                blurRadius: 8,
-                offset: const Offset(0, 2),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 12),
+          child: Row(
+            children: [
+              Container(
+                width: 38,
+                height: 38,
+                decoration: BoxDecoration(
+                  color: color.withValues(alpha: 0.12),
+                  borderRadius: BorderRadius.circular(11),
+                ),
+                child: Icon(icon, color: color, size: 20),
+              ),
+              const SizedBox(width: 11),
+              Expanded(
+                child: Text(
+                  label,
+                  style: theme.textTheme.labelLarge?.copyWith(
+                    fontWeight: FontWeight.w600,
+                    color: colorScheme.onSurface,
+                    fontSize: 13,
+                  ),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
               ),
             ],
-          ),
-          child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-            child: Row(
-              children: [
-                Container(
-                  width: 40,
-                  height: 40,
-                  decoration: BoxDecoration(
-                    color: color.withValues(alpha: 0.15),
-                    borderRadius: BorderRadius.circular(10),
-                  ),
-                  child: Icon(icon, color: color, size: 22),
-                ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: Text(
-                    label,
-                    style: theme.textTheme.labelLarge?.copyWith(
-                      fontWeight: FontWeight.w600,
-                      color: colorScheme.onSurface,
-                    ),
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                ),
-              ],
-            ),
           ),
         ),
       ),

@@ -37,7 +37,13 @@ class ProgressDao {
       progressPercentage: Value(progressPercentage),
       lastReadAt: Value(DateTime.now()),
     );
-    return _db.into(_db.readingProgress).insertOnConflictUpdate(companion);
+    return _db.into(_db.readingProgress).insert(
+          companion,
+          onConflict: DoUpdate(
+            (_) => companion,
+            target: [_db.readingProgress.bookId],
+          ),
+        );
   }
 
   /// Deletes reading progress for a book (used when a book is deleted).

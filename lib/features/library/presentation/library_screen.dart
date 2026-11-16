@@ -22,7 +22,7 @@ class LibraryScreen extends ConsumerStatefulWidget {
 }
 
 class _LibraryScreenState extends ConsumerState<LibraryScreen> {
-  final _searchController = TextEditingController();
+  final TextEditingController _searchController = TextEditingController();
   bool _searchVisible = false;
 
   @override
@@ -50,32 +50,56 @@ class _LibraryScreenState extends ConsumerState<LibraryScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final ThemeData theme = Theme.of(context);
+    final ColorScheme colorScheme = theme.colorScheme;
     final filters = ref.watch(libraryFiltersProvider);
     final booksAsync = ref.watch(filteredBooksProvider);
     final subjectMapAsync = ref.watch(subjectMapProvider);
+    final int bookCount = booksAsync.valueOrNull?.length ?? 0;
 
     return Scaffold(
       appBar: AppBar(
+        toolbarHeight: 72,
         title: _searchVisible
             ? TextField(
                 controller: _searchController,
                 autofocus: true,
-                decoration: const InputDecoration(
-                  hintText: 'Search books...',
+                style: theme.textTheme.bodyMedium,
+                decoration: InputDecoration(
+                  hintText: 'Search your library...',
+                  prefixIcon: const Icon(Icons.search_rounded, size: 21),
                   border: InputBorder.none,
-                  prefixIcon: Icon(Icons.search),
+                  enabledBorder: InputBorder.none,
+                  focusedBorder: InputBorder.none,
+                  contentPadding: const EdgeInsets.symmetric(vertical: 4),
                 ),
-                onChanged: (value) =>
-                    ref.read(libraryFiltersProvider.notifier).setSearchQuery(value),
+                onChanged: (value) => ref
+                    .read(libraryFiltersProvider.notifier)
+                    .setSearchQuery(value),
               )
-            : const Text('Library'),
+            : Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Text('Library'),
+                  const SizedBox(height: 2),
+                  Text(
+                    bookCount == 1 ? '1 book' : '$bookCount books',
+                    style: theme.textTheme.labelSmall?.copyWith(
+                      color: colorScheme.onSurfaceVariant,
+                      fontWeight: FontWeight.w500,
+                    ),
+                  ),
+                ],
+              ),
         actions: [
           IconButton(
-            icon: Icon(_searchVisible ? Icons.close : Icons.search),
+            icon: Icon(_searchVisible ? Icons.close_rounded : Icons.search_rounded),
+            tooltip: _searchVisible ? 'Close search' : 'Search',
             onPressed: _toggleSearch,
           ),
           PopupMenuButton<SortBy>(
-            icon: const Icon(Icons.sort),
+            icon: const Icon(Icons.sort_rounded),
             tooltip: 'Sort',
             onSelected: (sortBy) =>
                 ref.read(libraryFiltersProvider.notifier).setSortBy(sortBy),
@@ -85,41 +109,43 @@ class _LibraryScreenState extends ConsumerState<LibraryScreen> {
                 child: Row(
                   children: [
                     if (filters.sortBy == s)
-                      Icon(Icons.check, color: Theme.of(context).colorScheme.primary,
-                          size: 20)
+                      Icon(
+                        Icons.check_rounded,
+                        color: colorScheme.primary,
+                        size: 19,
+                      )
                     else
-                      const SizedBox(width: 20),
-                    const SizedBox(width: 8),
+                      const SizedBox(width: 19),
+                    const SizedBox(width: 10),
                     Text(s.label),
                   ],
                 ),
               );
             }).toList(),
           ),
+          const SizedBox(width: 4),
         ],
       ),
       body: Column(
         children: [
-          // ── Filter bar ────────────────────────────────────────────────────────
           _FilterBar(filters: filters),
-          const Divider(height: 1),
 
-          // ── Book grid ──────────────────────────────────────────────────────────
           Expanded(
             child: booksAsync.when(
               data: (books) {
                 if (books.isEmpty) {
                   return EmptyState(
                     icon: filters.hasActiveFilters
-                        ? Icons.filter_alt_off_outlined
+                        ? Icons.filter_alt_off_rounded
                         : Icons.library_books_outlined,
                     title: filters.hasActiveFilters
                         ? 'No books match your filters'
                         : 'Your library is empty',
                     message: filters.hasActiveFilters
                         ? 'Try adjusting the filters or clearing them.'
-                        : 'Import PDF or Text files to get started.',
-                    actionLabel: filters.hasActiveFilters ? null : 'Import Documents',
+                        : 'Import PDF, Word, or text files to get started.',
+                    actionLabel:
+                        filters.hasActiveFilters ? null : 'Import Documents',
                     onAction: filters.hasActiveFilters ? null : _pickAndImport,
                   );
                 }
@@ -137,7 +163,7 @@ class _LibraryScreenState extends ConsumerState<LibraryScreen> {
       ),
       floatingActionButton: FloatingActionButton.extended(
         onPressed: _pickAndImport,
-        icon: const Icon(Icons.add),
+        icon: const Icon(Icons.add_rounded),
         label: const Text('Import'),
         tooltip: 'Import documents',
       ),
@@ -147,15 +173,15 @@ class _LibraryScreenState extends ConsumerState<LibraryScreen> {
   Widget _buildBookGrid(List<Book> books, Map<int, String> subjectMap) {
     return LayoutBuilder(
       builder: (context, constraints) {
-        // Responsive column count: 2 on phones, 3+ on tablets.
-        final crossAxisCount = (constraints.maxWidth / 160).floor().clamp(2, 6);
+        final int crossAxisCount =
+            (constraints.maxWidth / 168).floor().clamp(2, 6);
         return GridView.builder(
-          padding: const EdgeInsets.all(12),
+          padding: const EdgeInsets.fromLTRB(16, 8, 16, 96),
           gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
             crossAxisCount: crossAxisCount,
-            childAspectRatio: 0.55,
-            crossAxisSpacing: 8,
-            mainAxisSpacing: 8,
+            childAspectRatio: 0.57,
+            crossAxisSpacing: 12,
+            mainAxisSpacing: 14,
           ),
           itemCount: books.length,
           itemBuilder: (context, index) {
@@ -173,22 +199,22 @@ class _LibraryScreenState extends ConsumerState<LibraryScreen> {
 }
 
 /// A horizontally scrollable filter bar with grade, category, and subject
-/// dropdowns.
+/// dropdown chips.
 class _FilterBar extends ConsumerWidget {
   const _FilterBar({required this.filters});
+
   final LibraryFilters filters;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final subjectsAsync = ref.watch(allSubjectsProvider);
 
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 4, 16, 8),
       child: SingleChildScrollView(
         scrollDirection: Axis.horizontal,
         child: Row(
           children: [
-            // ── Grade filter ──────────────────────────────────────────────────
             _FilterDropdown<int?>(
               label: filters.selectedGrade != null
                   ? 'Grade ${filters.selectedGrade}'
@@ -204,8 +230,6 @@ class _FilterBar extends ConsumerWidget {
               onChanged: (v) =>
                   ref.read(libraryFiltersProvider.notifier).setGrade(v),
             ),
-
-            // ── Category filter ────────────────────────────────────────────────
             _FilterDropdown<BookCategory?>(
               label: filters.selectedCategory?.shortLabel ?? 'All Categories',
               icon: Icons.category_outlined,
@@ -219,8 +243,6 @@ class _FilterBar extends ConsumerWidget {
               onChanged: (v) =>
                   ref.read(libraryFiltersProvider.notifier).setCategory(v),
             ),
-
-            // ── Subject filter ────────────────────────────────────────────────
             subjectsAsync.when(
               data: (subjects) => _FilterDropdown<int?>(
                 label: _subjectLabel(filters.selectedSubjectId, subjects),
@@ -237,25 +259,31 @@ class _FilterBar extends ConsumerWidget {
               ),
               loading: () => const SizedBox(
                 width: 120,
-                child: Center(child: SizedBox(
-                  width: 16, height: 16,
-                  child: CircularProgressIndicator(strokeWidth: 2),
-                )),
+                child: Center(
+                  child: SizedBox(
+                    width: 16,
+                    height: 16,
+                    child: CircularProgressIndicator(strokeWidth: 2),
+                  ),
+                ),
               ),
               error: (_, _) => const SizedBox.shrink(),
             ),
-
-            // ── Clear filters ──────────────────────────────────────────────────
             if (filters.hasActiveFilters)
-              TextButton.icon(
-                onPressed: () {
-                  ref.read(libraryFiltersProvider.notifier).clearFilters();
-                  _clearSearch(ref);
-                },
-                icon: const Icon(Icons.clear, size: 18),
-                label: const Text('Clear'),
-                style: TextButton.styleFrom(
-                  padding: const EdgeInsets.symmetric(horizontal: 8),
+              Padding(
+                padding: const EdgeInsets.only(left: 4),
+                child: TextButton.icon(
+                  onPressed: () {
+                    ref.read(libraryFiltersProvider.notifier).clearFilters();
+                    _clearSearch(ref);
+                  },
+                  icon: const Icon(Icons.close_rounded, size: 17),
+                  label: const Text('Clear'),
+                  style: TextButton.styleFrom(
+                    padding: const EdgeInsets.symmetric(horizontal: 10),
+                    minimumSize: const Size(0, 36),
+                    tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                  ),
                 ),
               ),
           ],
@@ -277,7 +305,7 @@ class _FilterBar extends ConsumerWidget {
   }
 }
 
-/// A compact dropdown button used in the filter bar.
+/// A compact dropdown chip used in the filter bar.
 class _FilterDropdown<T> extends StatelessWidget {
   const _FilterDropdown({
     required this.label,
@@ -295,34 +323,57 @@ class _FilterDropdown<T> extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final hasSelection = selected != null;
+    final ThemeData theme = Theme.of(context);
+    final ColorScheme colorScheme = theme.colorScheme;
+    final bool hasSelection = selected != null;
 
     return Container(
-      margin: const EdgeInsets.symmetric(horizontal: 4, vertical: 4),
-      padding: const EdgeInsets.symmetric(horizontal: 8),
+      margin: const EdgeInsets.only(right: 8),
+      padding: const EdgeInsets.symmetric(horizontal: 12),
       decoration: BoxDecoration(
         color: hasSelection
-            ? theme.colorScheme.primaryContainer.withValues(alpha: 0.5)
-            : theme.colorScheme.surfaceContainerHighest,
-        borderRadius: BorderRadius.circular(20),
+            ? colorScheme.primaryContainer.withValues(alpha: 0.55)
+            : (theme.cardTheme.color ?? colorScheme.surfaceContainerLowest),
+        borderRadius: BorderRadius.circular(999),
+        border: Border.all(
+          color: hasSelection
+              ? colorScheme.primary.withValues(alpha: 0.25)
+              : colorScheme.outlineVariant,
+        ),
       ),
       child: DropdownButtonHideUnderline(
         child: DropdownButton<T>(
           value: selected,
-          icon: const Icon(Icons.arrow_drop_down, size: 20),
-          style: theme.textTheme.labelMedium?.copyWith(
-            fontWeight: FontWeight.w500,
+          isDense: true,
+          borderRadius: BorderRadius.circular(16),
+          dropdownColor:
+              theme.cardTheme.color ?? colorScheme.surfaceContainerLowest,
+          icon: Icon(
+            Icons.keyboard_arrow_down_rounded,
+            size: 19,
+            color: hasSelection
+                ? colorScheme.primary
+                : colorScheme.onSurfaceVariant,
           ),
-          padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 6),
+          style: theme.textTheme.labelMedium?.copyWith(
+            fontWeight: FontWeight.w600,
+            color: hasSelection ? colorScheme.primary : colorScheme.onSurface,
+          ),
+          padding: const EdgeInsets.symmetric(vertical: 9),
           items: items.map((item) {
             return DropdownMenuItem<T>(
               value: item.value,
               child: Row(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  Icon(icon, size: 18),
-                  const SizedBox(width: 6),
+                  Icon(
+                    icon,
+                    size: 17,
+                    color: hasSelection
+                        ? colorScheme.primary
+                        : colorScheme.onSurfaceVariant,
+                  ),
+                  const SizedBox(width: 7),
                   Text(item.label),
                 ],
               ),

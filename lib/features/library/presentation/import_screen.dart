@@ -47,8 +47,9 @@ class _ImportScreenState extends ConsumerState<ImportScreen> {
   void initState() {
     super.initState();
     if (_isSingle) {
-      _titleController.text =
-          FileUtils.fileNameWithoutExtension(widget.files.first.name);
+      _titleController.text = FileUtils.fileNameWithoutExtension(
+        widget.files.first.name,
+      );
     }
   }
 
@@ -109,9 +110,11 @@ class _ImportScreenState extends ConsumerState<ImportScreen> {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text(_isSingle
-                ? '"${_titleController.text}" imported successfully'
-                : '${widget.files.length} books imported successfully'),
+            content: Text(
+              _isSingle
+                  ? '"${_titleController.text}" imported successfully'
+                  : '${widget.files.length} books imported successfully',
+            ),
           ),
         );
         context.pop();
@@ -140,12 +143,18 @@ class _ImportScreenState extends ConsumerState<ImportScreen> {
 
     return Scaffold(
       appBar: AppBar(
-        title: Text(_isSingle ? 'Import Document' : 'Import ${widget.files.length} Documents'),
+        title: Text(
+          _isSingle
+              ? 'Import Document'
+              : 'Import ${widget.files.length} Documents',
+        ),
       ),
       body: _importing
-          ? LoadingIndicator(message: _isSingle
-              ? 'Importing "${_titleController.text}"...'
-              : 'Importing ${widget.files.length} books...')
+          ? LoadingIndicator(
+              message: _isSingle
+                  ? 'Importing "${_titleController.text}"...'
+                  : 'Importing ${widget.files.length} books...',
+            )
           : Form(
               key: _formKey,
               child: ListView(
@@ -169,16 +178,16 @@ class _ImportScreenState extends ConsumerState<ImportScreen> {
                         labelText: 'Book Title *',
                         prefixIcon: Icon(Icons.title),
                       ),
-                      validator: (v) =>
-                          (v == null || v.trim().isEmpty)
-                              ? 'Please enter a title'
-                              : null,
+                      validator: (v) => (v == null || v.trim().isEmpty)
+                          ? 'Please enter a title'
+                          : null,
                     ),
                     const SizedBox(height: 16),
                   ],
 
                   // ── Category ────────────────────────────────────────────────
                   DropdownButtonFormField<BookCategory>(
+                    isExpanded: true,
                     initialValue: _category,
                     decoration: const InputDecoration(
                       labelText: 'Category *',
@@ -191,12 +200,14 @@ class _ImportScreenState extends ConsumerState<ImportScreen> {
                       );
                     }).toList(),
                     onChanged: (v) => setState(() => _category = v),
-                    validator: (v) => v == null ? 'Please select a category' : null,
+                    validator: (v) =>
+                        v == null ? 'Please select a category' : null,
                   ),
                   const SizedBox(height: 16),
 
                   // ── Grade ────────────────────────────────────────────────────
                   DropdownButtonFormField<int>(
+                    isExpanded: true,
                     initialValue: _grade,
                     decoration: const InputDecoration(
                       labelText: 'Grade *',
@@ -209,7 +220,8 @@ class _ImportScreenState extends ConsumerState<ImportScreen> {
                       );
                     }).toList(),
                     onChanged: (v) => setState(() => _grade = v),
-                    validator: (v) => v == null ? 'Please select a grade' : null,
+                    validator: (v) =>
+                        v == null ? 'Please select a grade' : null,
                   ),
                   const SizedBox(height: 16),
 
@@ -222,6 +234,7 @@ class _ImportScreenState extends ConsumerState<ImportScreen> {
                         _subjectId = null;
                       }
                       return DropdownButtonFormField<int>(
+                        isExpanded: true,
                         initialValue: _subjectId,
                         decoration: const InputDecoration(
                           labelText: 'Subject *',
@@ -289,14 +302,17 @@ class _ImportScreenState extends ConsumerState<ImportScreen> {
                     Container(
                       padding: const EdgeInsets.all(12),
                       decoration: BoxDecoration(
-                        color: theme.colorScheme.errorContainer
-                            .withValues(alpha: 0.5),
+                        color: theme.colorScheme.errorContainer.withValues(
+                          alpha: 0.5,
+                        ),
                         borderRadius: BorderRadius.circular(12),
                       ),
                       child: Row(
                         children: [
-                          Icon(Icons.error_outline,
-                              color: theme.colorScheme.error),
+                          Icon(
+                            Icons.error_outline,
+                            color: theme.colorScheme.error,
+                          ),
                           const SizedBox(width: 8),
                           Expanded(
                             child: Text(
@@ -313,23 +329,37 @@ class _ImportScreenState extends ConsumerState<ImportScreen> {
                   ],
 
                   // ── Actions ────────────────────────────────────────────────
-                  Row(
-                    children: [
-                      Expanded(
-                        child: OutlinedButton(
-                          onPressed: () => context.pop(),
-                          child: const Text('Cancel'),
-                        ),
-                      ),
-                      const SizedBox(width: 12),
-                      Expanded(
-                        child: FilledButton.icon(
-                          onPressed: _handleImport,
-                          icon: const Icon(Icons.download),
-                          label: Text(_isSingle ? 'Import' : 'Import All'),
-                        ),
-                      ),
-                    ],
+                  LayoutBuilder(
+                    builder: (context, constraints) {
+                      final Widget cancelButton = OutlinedButton(
+                        onPressed: () => context.pop(),
+                        child: const Text('Cancel'),
+                      );
+                      final Widget importButton = FilledButton.icon(
+                        onPressed: _handleImport,
+                        icon: const Icon(Icons.download_rounded),
+                        label: Text(_isSingle ? 'Import' : 'Import All'),
+                      );
+
+                      if (constraints.maxWidth < 340) {
+                        return Column(
+                          crossAxisAlignment: CrossAxisAlignment.stretch,
+                          children: [
+                            importButton,
+                            const SizedBox(height: 10),
+                            cancelButton,
+                          ],
+                        );
+                      }
+
+                      return Row(
+                        children: [
+                          Expanded(child: cancelButton),
+                          const SizedBox(width: 12),
+                          Expanded(child: importButton),
+                        ],
+                      );
+                    },
                   ),
                 ],
               ),
@@ -390,8 +420,11 @@ class _ImportScreenState extends ConsumerState<ImportScreen> {
                 padding: const EdgeInsets.symmetric(vertical: 2),
                 child: Row(
                   children: [
-                    Icon(Icons.description,
-                        size: 20, color: theme.colorScheme.primary),
+                    Icon(
+                      Icons.description,
+                      size: 20,
+                      color: theme.colorScheme.primary,
+                    ),
                     const SizedBox(width: 8),
                     Expanded(
                       child: Text(

@@ -39,9 +39,9 @@ class BookmarksScreen extends ConsumerWidget {
           });
 
           return ListView.separated(
-            padding: const EdgeInsets.all(12),
+            padding: const EdgeInsets.fromLTRB(16, 12, 16, 32),
             itemCount: bookmarks.length,
-            separatorBuilder: (_, _) => const SizedBox(height: 4),
+            separatorBuilder: (_, _) => const SizedBox(height: 8),
             itemBuilder: (context, index) {
               final bm = bookmarks[index];
               final book = booksMap[bm.bookId];

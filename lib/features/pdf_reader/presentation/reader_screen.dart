@@ -47,9 +47,6 @@ class _ReaderScreenState extends ConsumerState<ReaderScreen>
   double _scrollHandleY = 0;
   bool _scrollHandleInitialized = false;
 
-  // Selected text for AI
-  String _selectedText = '';
-
   // Current state
   int _currentPage = 1;
   int _totalPages = 0;
@@ -317,6 +314,20 @@ class _ReaderScreenState extends ConsumerState<ReaderScreen>
     });
   }
 
+  Future<void> _zoomIn() async {
+    if (!_ready) return;
+    await _pdfrxController.zoomUp(
+      duration: const Duration(milliseconds: 150),
+    );
+  }
+
+  Future<void> _zoomOut() async {
+    if (!_ready) return;
+    await _pdfrxController.zoomDown(
+      duration: const Duration(milliseconds: 150),
+    );
+  }
+
   Future<void> _showJumpToPageDialog() async {
     final controller = TextEditingController();
     final result = await showDialog<int>(
@@ -524,178 +535,21 @@ class _ReaderScreenState extends ConsumerState<ReaderScreen>
     );
   }
 
-  // Long press context menu: Copy, Select All, Send to Gemini
-  void _showTextContextMenu() {
-    showModalBottomSheet(
-      context: context,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
-      ),
-      builder: (ctx) => SafeArea(
-        child: Padding(
-          padding: const EdgeInsets.symmetric(vertical: 8),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Container(
-                width: 40,
-                height: 4,
-                margin: const EdgeInsets.only(bottom: 12),
-                decoration: BoxDecoration(
-                  color: Colors.grey.shade300,
-                  borderRadius: BorderRadius.circular(2),
-                ),
-              ),
-              ListTile(
-                leading: const Icon(Icons.content_copy, color: Colors.blue),
-                title: const Text('Copy text'),
-                subtitle: const Text('Type text to copy to clipboard'),
-                onTap: () {
-                  Navigator.pop(ctx);
-                  _showCopyTextDialog();
-                },
-              ),
-              ListTile(
-                leading: const Icon(Icons.select_all, color: Colors.green),
-                title: const Text('Select all & copy'),
-                subtitle: Text('All text from page $_currentPage'),
-                onTap: () {
-                  Navigator.pop(ctx);
-                  _selectAllAndCopy();
-                },
-              ),
-              ListTile(
-                leading: const Icon(Icons.auto_awesome, color: Colors.amber),
-                title: const Text('Send to Gemini AI'),
-                subtitle: const Text('Type or paste text, ask AI to explain'),
-                onTap: () {
-                  Navigator.pop(ctx);
-                  _showSelectTextDialog();
-                },
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
+  Future<void> _askGeminiAboutSelection(
+    pdfrx.PdfViewerContextMenuBuilderParams params,
+  ) async {
+    final selected =
+        (await params.textSelectionDelegate.getSelectedText()).trim();
+    if (selected.isEmpty || !mounted) return;
 
-  // Copy text dialog
-  Future<void> _showCopyTextDialog() async {
-    final controller = TextEditingController();
-    await showDialog(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        title: const Text('Copy Text'),
-        content: TextField(
-          controller: controller,
-          maxLines: 5,
-          autofocus: true,
-          decoration: const InputDecoration(
-            hintText: 'Type or paste text here...',
-            border: OutlineInputBorder(),
-          ),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx),
-            child: const Text('Cancel'),
-          ),
-          FilledButton.icon(
-            icon: const Icon(Icons.copy, size: 18),
-            label: const Text('Copy'),
-            onPressed: () {
-              final text = controller.text.trim();
-              if (text.isNotEmpty) {
-                // Copy to clipboard
-                // ignore: use_build_context_synchronously
-                Navigator.pop(ctx);
-                ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(content: Text('Text copied!')),
-                );
-              }
-            },
-          ),
-        ],
-      ),
-    );
-  }
+    params.dismissContextMenu();
+    await params.textSelectionDelegate.clearTextSelection();
 
-  // Select all text from current page (shows page info)
-  void _selectAllAndCopy() {
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text('Use "Send to Gemini" to ask AI about page $_currentPage content'),
-        action: SnackBarAction(
-          label: 'Ask AI',
-          onPressed: () => context.push(
-            AppRoutes.aiFor(widget.bookId, page: _currentPage),
-          ),
-        ),
-      ),
+    if (!mounted) return;
+    await context.push(
+      AppRoutes.aiFor(widget.bookId, page: _currentPage),
+      extra: selected,
     );
-  }
-
-  // Show dialog to type/paste text, then send to Gemini
-  Future<void> _showSelectTextDialog() async {
-    final textController = TextEditingController(text: _selectedText);
-    final result = await showDialog<String>(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        title: const Row(
-          children: [
-            Icon(Icons.auto_awesome, color: Colors.amber),
-            SizedBox(width: 8),
-            Text('Ask AI about text'),
-          ],
-        ),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            const Text(
-              'Type or paste text from the book, then AI will explain it:',
-              style: TextStyle(fontSize: 13),
-            ),
-            const SizedBox(height: 12),
-            TextField(
-              controller: textController,
-              maxLines: 5,
-              autofocus: true,
-              decoration: const InputDecoration(
-                hintText: 'Paste or type the text here...',
-                border: OutlineInputBorder(),
-              ),
-            ),
-          ],
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(ctx).pop(),
-            child: const Text('Cancel'),
-          ),
-          FilledButton.icon(
-            icon: const Icon(Icons.auto_awesome, size: 18),
-            label: const Text('Ask AI'),
-            onPressed: () {
-              final text = textController.text.trim();
-              if (text.isNotEmpty) Navigator.of(ctx).pop(text);
-            },
-          ),
-        ],
-      ),
-    );
-
-    if (result != null && result.isNotEmpty && mounted) {
-      setState(() => _selectedText = result);
-      context.push(
-        AppRoutes.aiFor(
-          widget.bookId,
-          page: _currentPage,
-          selectedText: result,
-        ),
-      );
-    }
   }
 
   /// Horizontal strip used by single-page mode: all pages are laid out
@@ -753,7 +607,6 @@ class _ReaderScreenState extends ConsumerState<ReaderScreen>
                 ]),
           child: GestureDetector(
             onTap: _toggleToolbar,
-            onLongPress: _showTextContextMenu,
             behavior: HitTestBehavior.translucent,
             child: pdfrx.PdfViewer.file(
               _book!.filePath,
@@ -768,6 +621,17 @@ class _ReaderScreenState extends ConsumerState<ReaderScreen>
                 onViewerReady: _onPdfrxViewerReady,
                 scaleEnabled: true,
                 panEnabled: true,
+                customizeContextMenuItems: (params, items) {
+                  if (params.isTextSelectionEnabled &&
+                      params.textSelectionDelegate.hasSelectedText) {
+                    items.add(
+                      ContextMenuButtonItem(
+                        label: 'Ask Gemini',
+                        onPressed: () => _askGeminiAboutSelection(params),
+                      ),
+                    );
+                  }
+                },
                 layoutPages: settings.mode == ReadingMode.singlePage
                     ? _singlePageLayout
                     : null,
@@ -811,9 +675,65 @@ class _ReaderScreenState extends ConsumerState<ReaderScreen>
             child: const AnnotationToolbar(),
           ),
 
+        // Zoom buttons for annotation mode
+        if (_isAnnotationMode && _ready) _buildZoomControls(),
+
         // Scroll handle for fast page navigation
         if (_ready) _buildScrollHandle(),
       ],
+    );
+  }
+
+  Widget _buildZoomControls() {
+    return Positioned(
+      left: 12,
+      bottom: MediaQuery.of(context).padding.bottom + 76,
+      child: Material(
+        color: Colors.black.withValues(alpha: 0.75),
+        borderRadius: BorderRadius.circular(22),
+        elevation: 4,
+        child: AnimatedBuilder(
+          animation: _pdfrxController,
+          builder: (context, _) {
+            final zoom = (_pdfrxController.currentZoom * 100).round();
+            return Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                IconButton(
+                  onPressed: _zoomIn,
+                  tooltip: 'Zoom in',
+                  icon: const Icon(Icons.add, color: Colors.white, size: 22),
+                  style: IconButton.styleFrom(
+                    minimumSize: const Size(44, 44),
+                    padding: EdgeInsets.zero,
+                  ),
+                ),
+                Text(
+                  '$zoom%',
+                  style: const TextStyle(
+                    color: Colors.white70,
+                    fontSize: 10,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+                IconButton(
+                  onPressed: _zoomOut,
+                  tooltip: 'Zoom out',
+                  icon: const Icon(
+                    Icons.remove,
+                    color: Colors.white,
+                    size: 22,
+                  ),
+                  style: IconButton.styleFrom(
+                    minimumSize: const Size(44, 44),
+                    padding: EdgeInsets.zero,
+                  ),
+                ),
+              ],
+            );
+          },
+        ),
+      ),
     );
   }
 
@@ -956,13 +876,6 @@ class _ReaderScreenState extends ConsumerState<ReaderScreen>
                   onPressed: () => context.push(
                     AppRoutes.aiFor(widget.bookId, page: _currentPage),
                   ),
-                ),
-                // Ask AI about typed/selected text
-                IconButton(
-                  icon: const Icon(Icons.text_snippet_outlined,
-                      color: Colors.white),
-                  tooltip: 'Select text & Ask AI',
-                  onPressed: () => _showSelectTextDialog(),
                 ),
                 StreamBuilder<List<Bookmark>>(
                   stream: ref

@@ -107,55 +107,81 @@ class _BookDetailsContent extends ConsumerWidget {
         children: [
           // ── Cover + title ────────────────────────────────────────────────────
           Container(
-            padding: const EdgeInsets.all(24),
+            width: double.infinity,
+            padding: const EdgeInsets.fromLTRB(24, 8, 24, 26),
+            decoration: BoxDecoration(
+              gradient: LinearGradient(
+                begin: Alignment.topCenter,
+                end: Alignment.bottomCenter,
+                colors: [
+                  colorScheme.primaryContainer.withValues(alpha: 0.5),
+                  colorScheme.surface,
+                ],
+              ),
+              borderRadius: const BorderRadius.vertical(
+                bottom: Radius.circular(30),
+              ),
+            ),
             child: Column(
               children: [
                 Container(
-                  width: 140,
-                  height: 190,
+                  width: 148,
+                  height: 200,
                   decoration: BoxDecoration(
-                    borderRadius: BorderRadius.circular(12),
+                    borderRadius: BorderRadius.circular(16),
+                    border: Border.all(
+                      color: colorScheme.surface.withValues(alpha: 0.65),
+                    ),
                     boxShadow: [
                       BoxShadow(
-                        color: Colors.black.withValues(alpha: 0.2),
-                        blurRadius: 12,
-                        offset: const Offset(0, 4),
+                        color: Colors.black.withValues(alpha: 0.22),
+                        blurRadius: 24,
+                        offset: const Offset(0, 10),
                       ),
                     ],
                   ),
                   child: ClipRRect(
-                    borderRadius: BorderRadius.circular(12),
+                    borderRadius: BorderRadius.circular(15),
                     child: _buildCover(colorScheme),
                   ),
                 ),
-                const SizedBox(height: 16),
+                const SizedBox(height: 18),
                 Text(
                   book.title,
                   style: theme.textTheme.titleLarge?.copyWith(
                     fontWeight: FontWeight.w700,
+                    height: 1.25,
                   ),
                   textAlign: TextAlign.center,
+                ),
+                const SizedBox(height: 12),
+                Wrap(
+                  alignment: WrapAlignment.center,
+                  spacing: 8,
+                  runSpacing: 6,
+                  children: [
+                    _infoChip(
+                      context,
+                      Icons.category_outlined,
+                      book.category.label,
+                    ),
+                    _infoChip(
+                      context,
+                      Icons.grade_outlined,
+                      'Grade ${book.grade}',
+                    ),
+                    if (subjectName != null)
+                      _infoChip(
+                        context,
+                        Icons.subject_outlined,
+                        subjectName!,
+                      ),
+                  ],
                 ),
               ],
             ),
           ),
-
-          // ── Chips ────────────────────────────────────────────────────────────
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 16),
-            child: Wrap(
-              alignment: WrapAlignment.center,
-              spacing: 8,
-              runSpacing: 4,
-              children: [
-                _infoChip(context, Icons.category_outlined, book.category.label),
-                _infoChip(context, Icons.grade_outlined, 'Grade ${book.grade}'),
-                if (subjectName != null)
-                  _infoChip(context, Icons.subject_outlined, subjectName!),
-              ],
-            ),
-          ),
-          const SizedBox(height: 24),
+          const SizedBox(height: 20),
 
           // ── Metadata list ────────────────────────────────────────────────────
           _metadataSection(context, theme),
@@ -165,22 +191,28 @@ class _BookDetailsContent extends ConsumerWidget {
           // ── Read button ──────────────────────────────────────────────────────
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: 16),
-            child: FilledButton.icon(
-              onPressed: () {
-                ref.read(bookRepositoryProvider).markAsOpened(book.id);
-                context.push('/reader/${book.id}');
-              },
-              icon: const Icon(Icons.menu_book),
-              label: const Text('Read Book'),
+            child: SizedBox(
+              width: double.infinity,
+              child: FilledButton.icon(
+                onPressed: () {
+                  ref.read(bookRepositoryProvider).markAsOpened(book.id);
+                  context.push('/reader/${book.id}');
+                },
+                icon: const Icon(Icons.menu_book_rounded, size: 20),
+                label: const Text('Read Book'),
+              ),
             ),
           ),
           const SizedBox(height: 10),
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: 16),
-            child: OutlinedButton.icon(
-              onPressed: () => context.push(AppRoutes.aiFor(book.id)),
-              icon: const Icon(Icons.auto_awesome),
-              label: const Text('Ask AI about this book'),
+            child: SizedBox(
+              width: double.infinity,
+              child: OutlinedButton.icon(
+                onPressed: () => context.push(AppRoutes.aiFor(book.id)),
+                icon: const Icon(Icons.auto_awesome_rounded, size: 19),
+                label: const Text('Ask AI about this book'),
+              ),
             ),
           ),
           const SizedBox(height: 32),
@@ -237,7 +269,19 @@ class _BookDetailsContent extends ConsumerWidget {
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Icon(entry.icon, size: 20, color: theme.colorScheme.primary),
+          Container(
+            width: 34,
+            height: 34,
+            decoration: BoxDecoration(
+              color: theme.colorScheme.primary.withValues(alpha: 0.09),
+              borderRadius: BorderRadius.circular(10),
+            ),
+            child: Icon(
+              entry.icon,
+              size: 18,
+              color: theme.colorScheme.primary,
+            ),
+          ),
           const SizedBox(width: 12),
           Expanded(
             child: Column(
@@ -260,18 +304,26 @@ class _BookDetailsContent extends ConsumerWidget {
   }
 
   Widget _infoChip(BuildContext context, IconData icon, String label) {
+    final ColorScheme colorScheme = Theme.of(context).colorScheme;
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
       decoration: BoxDecoration(
-        color: Theme.of(context).colorScheme.primaryContainer.withValues(alpha: 0.4),
-        borderRadius: BorderRadius.circular(20),
+        color: Theme.of(context).cardTheme.color ??
+            colorScheme.surfaceContainerLowest,
+        borderRadius: BorderRadius.circular(999),
+        border: Border.all(color: colorScheme.outlineVariant),
       ),
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Icon(icon, size: 16, color: Theme.of(context).colorScheme.primary),
+          Icon(icon, size: 15, color: colorScheme.primary),
           const SizedBox(width: 6),
-          Text(label, style: Theme.of(context).textTheme.labelMedium),
+          Text(
+            label,
+            style: Theme.of(context).textTheme.labelMedium?.copyWith(
+                  fontWeight: FontWeight.w600,
+                ),
+          ),
         ],
       ),
     );

@@ -2,8 +2,10 @@ import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../app/theme/app_colors.dart';
 import '../../../core/services/backup_service.dart';
 import '../../../core/widgets/confirm_dialog.dart';
+import '../../../core/widgets/settings_section.dart';
 
 /// Backup and Restore screen accessible from Settings.
 class BackupScreen extends ConsumerStatefulWidget {
@@ -21,126 +23,55 @@ class _BackupScreenState extends ConsumerState<BackupScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final colorScheme = Theme.of(context).colorScheme;
-
     return Scaffold(
       appBar: AppBar(title: const Text('Backup & Restore')),
       body: ListView(
-        padding: const EdgeInsets.all(16),
+        padding: const EdgeInsets.fromLTRB(16, 8, 16, 32),
         children: [
-          // ── Info card ────────────────────────────────────────────────────
-          Card(
-            child: Padding(
-              padding: const EdgeInsets.all(16),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Row(
-                    children: [
-                      Icon(Icons.info_outline,
-                          color: colorScheme.primary, size: 20),
-                      const SizedBox(width: 8),
-                      Text('About Backup',
-                          style: Theme.of(context)
-                              .textTheme
-                              .titleSmall
-                              ?.copyWith(fontWeight: FontWeight.w600)),
-                    ],
-                  ),
-                  const SizedBox(height: 8),
-                  Text(
-                    'A backup archive (.tutormate file) includes all your books, '
-                    'notes, annotations, bookmarks, reading progress, and app settings. '
-                    'Store it on external storage or share it to restore on another device.',
-                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                          color: colorScheme.onSurfaceVariant,
-                        ),
-                  ),
-                ],
-              ),
-            ),
-          ),
-          const SizedBox(height: 16),
+          const _BackupHeroCard(),
 
-          // ── Progress ─────────────────────────────────────────────────────
           if (_isWorking) ...[
-            Text(_statusMessage,
-                style: Theme.of(context).textTheme.bodyMedium),
-            const SizedBox(height: 8),
-            LinearProgressIndicator(
-              value: _progress,
-              borderRadius: BorderRadius.circular(4),
-              minHeight: 8,
-            ),
             const SizedBox(height: 20),
+            _ProgressCard(message: _statusMessage, progress: _progress),
           ],
 
-          // ── Last backup path ─────────────────────────────────────────────
           if (_lastBackupPath != null && !_isWorking) ...[
-            Container(
-              padding: const EdgeInsets.all(12),
-              decoration: BoxDecoration(
-                color: colorScheme.primaryContainer.withValues(alpha: 0.3),
-                borderRadius: BorderRadius.circular(12),
-              ),
-              child: Row(
-                children: [
-                  Icon(Icons.check_circle,
-                      color: colorScheme.primary, size: 18),
-                  const SizedBox(width: 8),
-                  Expanded(
-                    child: Text(
-                      'Saved: ${_lastBackupPath!.split('/').last}',
-                      style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                            color: colorScheme.primary,
-                          ),
-                      maxLines: 2,
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                  ),
-                ],
-              ),
-            ),
             const SizedBox(height: 16),
+            _LastBackupCard(filePath: _lastBackupPath!),
           ],
 
-          // ── Backup button ────────────────────────────────────────────────
-          FilledButton.icon(
-            onPressed: _isWorking ? null : _createBackup,
-            icon: const Icon(Icons.backup_outlined),
-            label: const Text('Create Backup'),
-            style: FilledButton.styleFrom(minimumSize: const Size.fromHeight(52)),
-          ),
-          const SizedBox(height: 12),
-
-          // ── Restore button ───────────────────────────────────────────────
-          OutlinedButton.icon(
-            onPressed: _isWorking ? null : _pickAndRestore,
-            icon: const Icon(Icons.restore_outlined),
-            label: const Text('Restore from Backup'),
-            style: OutlinedButton.styleFrom(
-                minimumSize: const Size.fromHeight(52)),
-          ),
-          const SizedBox(height: 24),
-
-          // ── Warning ───────────────────────────────────────────────────────
-          Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
+          SettingsSection(
+            title: 'Backup',
             children: [
-              Icon(Icons.warning_amber_rounded,
-                  color: colorScheme.error, size: 18),
-              const SizedBox(width: 8),
-              Expanded(
-                child: Text(
-                  'Restoring will replace all current data with the contents '
-                  'of the backup file. The app will need to restart.',
-                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                        color: colorScheme.onSurfaceVariant,
-                      ),
-                ),
+              SettingsActionTile(
+                icon: Icons.cloud_upload_outlined,
+                color: AppColors.amber,
+                title: 'Create Backup',
+                subtitle: 'Save all books, notes, and settings to one file',
+                enabled: !_isWorking,
+                trailing: const Icon(Icons.download_rounded, size: 20),
+                onTap: _createBackup,
               ),
             ],
           ),
+
+          SettingsSection(
+            title: 'Restore',
+            children: [
+              SettingsActionTile(
+                icon: Icons.restore_rounded,
+                color: AppColors.violet,
+                title: 'Restore from Backup',
+                subtitle: 'Choose a .tutormate archive from your device',
+                enabled: !_isWorking,
+                trailing: const Icon(Icons.upload_rounded, size: 20),
+                onTap: _pickAndRestore,
+              ),
+            ],
+          ),
+
+          const SizedBox(height: 20),
+          const _RestoreWarning(),
         ],
       ),
     );
@@ -184,18 +115,16 @@ class _BackupScreenState extends ConsumerState<BackupScreen> {
           _isWorking = false;
           _statusMessage = '';
         });
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Backup failed: $e')),
-        );
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('Backup failed: $e')));
       }
     }
   }
 
   Future<void> _pickAndRestore() async {
     // Pick a .tutormate file
-    final result = await FilePicker.pickFiles(
-      type: FileType.any,
-    );
+    final result = await FilePicker.pickFiles(type: FileType.any);
     if (result.isEmpty) return;
     final filePath = result.first.path;
     if (filePath == null) return;
@@ -216,9 +145,7 @@ class _BackupScreenState extends ConsumerState<BackupScreen> {
       if (mounted) {
         setState(() => _isWorking = false);
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-              content:
-                  Text('Invalid backup: ${validation.error}')),
+          SnackBar(content: Text('Invalid backup: ${validation.error}')),
         );
       }
       return;
@@ -259,8 +186,7 @@ class _BackupScreenState extends ConsumerState<BackupScreen> {
         setState(() => _isWorking = false);
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
-            content: Text(
-                'Restore complete! Please restart TutorMate.'),
+            content: Text('Restore complete! Please restart TutorMate.'),
             duration: Duration(seconds: 5),
           ),
         );
@@ -268,10 +194,243 @@ class _BackupScreenState extends ConsumerState<BackupScreen> {
     } catch (e) {
       if (mounted) {
         setState(() => _isWorking = false);
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Restore failed: $e')),
-        );
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('Restore failed: $e')));
       }
     }
+  }
+}
+
+// ── Hero card ─────────────────────────────────────────────────────────────────
+
+class _BackupHeroCard extends StatelessWidget {
+  const _BackupHeroCard();
+
+  @override
+  Widget build(BuildContext context) {
+    final ThemeData theme = Theme.of(context);
+    final ColorScheme colorScheme = theme.colorScheme;
+
+    return Container(
+      padding: const EdgeInsets.all(18),
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(20),
+        gradient: LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [
+            colorScheme.primaryContainer.withValues(alpha: 0.65),
+            colorScheme.secondaryContainer.withValues(alpha: 0.35),
+          ],
+        ),
+        border: Border.all(color: colorScheme.primary.withValues(alpha: 0.08)),
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Container(
+            width: 54,
+            height: 54,
+            decoration: BoxDecoration(
+              color: colorScheme.primary,
+              borderRadius: BorderRadius.circular(16),
+              boxShadow: [
+                BoxShadow(
+                  color: colorScheme.primary.withValues(alpha: 0.28),
+                  blurRadius: 14,
+                  offset: const Offset(0, 5),
+                ),
+              ],
+            ),
+            child: const Icon(
+              Icons.cloud_sync_rounded,
+              color: Colors.white,
+              size: 27,
+            ),
+          ),
+          const SizedBox(width: 14),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'Keep your library safe',
+                  style: theme.textTheme.titleMedium?.copyWith(
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  'A .tutormate archive contains all your books, notes, '
+                  'annotations, bookmarks, reading progress, and settings. '
+                  'Store it on external storage or move it to another device.',
+                  style: theme.textTheme.bodySmall?.copyWith(
+                    color: colorScheme.onSurfaceVariant,
+                    height: 1.45,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+// ── Progress card ─────────────────────────────────────────────────────────────
+
+class _ProgressCard extends StatelessWidget {
+  const _ProgressCard({required this.message, required this.progress});
+
+  final String message;
+  final double progress;
+
+  @override
+  Widget build(BuildContext context) {
+    final ThemeData theme = Theme.of(context);
+    final ColorScheme colorScheme = theme.colorScheme;
+
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(18),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                SizedBox(
+                  width: 18,
+                  height: 18,
+                  child: CircularProgressIndicator(
+                    strokeWidth: 2.2,
+                    color: colorScheme.primary,
+                  ),
+                ),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: Text(
+                    message.isEmpty ? 'Working…' : message,
+                    style: theme.textTheme.bodyMedium?.copyWith(
+                      fontWeight: FontWeight.w500,
+                    ),
+                  ),
+                ),
+                Text(
+                  '${(progress * 100).round()}%',
+                  style: theme.textTheme.labelMedium?.copyWith(
+                    color: colorScheme.primary,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 14),
+            ClipRRect(
+              borderRadius: BorderRadius.circular(4),
+              child: LinearProgressIndicator(
+                value: progress,
+                minHeight: 8,
+                backgroundColor: colorScheme.surfaceContainerHighest,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+// ── Last backup card ──────────────────────────────────────────────────────────
+
+class _LastBackupCard extends StatelessWidget {
+  const _LastBackupCard({required this.filePath});
+
+  final String filePath;
+
+  @override
+  Widget build(BuildContext context) {
+    final ThemeData theme = Theme.of(context);
+    final ColorScheme colorScheme = theme.colorScheme;
+
+    return Container(
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: colorScheme.secondaryContainer.withValues(alpha: 0.35),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: colorScheme.secondary.withValues(alpha: 0.2)),
+      ),
+      child: Row(
+        children: [
+          Icon(
+            Icons.check_circle_rounded,
+            color: colorScheme.secondary,
+            size: 20,
+          ),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'Backup created',
+                  style: theme.textTheme.labelMedium?.copyWith(
+                    color: colorScheme.secondary,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  filePath.split('/').last,
+                  style: theme.textTheme.bodySmall?.copyWith(
+                    color: colorScheme.onSurfaceVariant,
+                  ),
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+// ── Restore warning ───────────────────────────────────────────────────────────
+
+class _RestoreWarning extends StatelessWidget {
+  const _RestoreWarning();
+
+  @override
+  Widget build(BuildContext context) {
+    final ThemeData theme = Theme.of(context);
+    final ColorScheme colorScheme = theme.colorScheme;
+
+    return Container(
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: colorScheme.errorContainer.withValues(alpha: 0.28),
+        borderRadius: BorderRadius.circular(16),
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Icon(Icons.warning_amber_rounded, color: colorScheme.error, size: 19),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Text(
+              'Restoring replaces all current data with the contents of the '
+              'backup file. TutorMate must be restarted afterwards.',
+              style: theme.textTheme.bodySmall?.copyWith(
+                color: colorScheme.onSurfaceVariant,
+                height: 1.4,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
   }
 }

@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 
-/// A compact statistics card for the dashboard.
+/// A compact, flat statistics card used on the dashboard.
 class StatCard extends StatelessWidget {
   const StatCard({
     super.key,
@@ -17,69 +17,51 @@ class StatCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final colorScheme = theme.colorScheme;
-    final effectiveColor = color ?? colorScheme.primary;
+    final ThemeData theme = Theme.of(context);
+    final ColorScheme colorScheme = theme.colorScheme;
+    final Color accent = color ?? colorScheme.primary;
 
     return Container(
+      padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
-        gradient: LinearGradient(
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-          colors: [
-            effectiveColor.withValues(alpha: 0.12),
-            effectiveColor.withValues(alpha: 0.04),
-          ],
-        ),
+        color: theme.cardTheme.color ?? colorScheme.surfaceContainerLowest,
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(
-          color: effectiveColor.withValues(alpha: 0.1),
-          width: 1,
-        ),
-        boxShadow: [
-          BoxShadow(
-            color: effectiveColor.withValues(alpha: 0.08),
-            blurRadius: 12,
-            offset: const Offset(0, 4),
+        border: Border.all(color: colorScheme.outlineVariant),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Container(
+            width: 32,
+            height: 32,
+            decoration: BoxDecoration(
+              color: accent.withValues(alpha: 0.12),
+              borderRadius: BorderRadius.circular(9),
+            ),
+            child: Icon(icon, color: accent, size: 17),
+          ),
+          const SizedBox(height: 8),
+          Text(
+            value.toString(),
+            style: theme.textTheme.titleLarge?.copyWith(
+              fontWeight: FontWeight.w700,
+              letterSpacing: -0.5,
+              color: colorScheme.onSurface,
+              height: 1.1,
+            ),
+          ),
+          const SizedBox(height: 1),
+          Text(
+            label,
+            style: theme.textTheme.labelSmall?.copyWith(
+              color: colorScheme.onSurfaceVariant,
+              fontSize: 10.5,
+              fontWeight: FontWeight.w500,
+            ),
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
           ),
         ],
-      ),
-      child: Padding(
-        padding: const EdgeInsets.all(10),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Container(
-              width: 34,
-              height: 34,
-              decoration: BoxDecoration(
-                color: effectiveColor.withValues(alpha: 0.2),
-                borderRadius: BorderRadius.circular(8),
-              ),
-              child: Icon(icon, color: effectiveColor, size: 18),
-            ),
-            const SizedBox(height: 6),
-            Text(
-              value.toString(),
-              style: theme.textTheme.titleLarge?.copyWith(
-                fontWeight: FontWeight.w700,
-                color: effectiveColor,
-              ),
-            ),
-            const SizedBox(height: 2),
-            Text(
-              label,
-              style: theme.textTheme.labelSmall?.copyWith(
-                color: colorScheme.onSurfaceVariant,
-                fontWeight: FontWeight.w500,
-                fontSize: 10,
-              ),
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-            ),
-          ],
-        ),
       ),
     );
   }

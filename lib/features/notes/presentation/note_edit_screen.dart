@@ -91,11 +91,7 @@ class _NoteEditScreenState extends ConsumerState<NoteEditScreen> {
       }
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(
-              _isEditing ? 'Note updated' : 'Note saved',
-            ),
-          ),
+          SnackBar(content: Text(_isEditing ? 'Note updated' : 'Note saved')),
         );
         context.pop();
       }
@@ -134,14 +130,18 @@ class _NoteEditScreenState extends ConsumerState<NoteEditScreen> {
               Container(
                 padding: const EdgeInsets.all(12),
                 decoration: BoxDecoration(
-                  color: theme.colorScheme.primaryContainer
-                      .withValues(alpha: 0.3),
+                  color: theme.colorScheme.primaryContainer.withValues(
+                    alpha: 0.3,
+                  ),
                   borderRadius: BorderRadius.circular(12),
                 ),
                 child: Row(
                   children: [
-                    Icon(Icons.link,
-                        size: 18, color: theme.colorScheme.primary),
+                    Icon(
+                      Icons.link,
+                      size: 18,
+                      color: theme.colorScheme.primary,
+                    ),
                     const SizedBox(width: 8),
                     Expanded(
                       child: Text(
@@ -149,7 +149,8 @@ class _NoteEditScreenState extends ConsumerState<NoteEditScreen> {
                             ? '${widget.linkedBookTitle} — Page ${widget.linkedPageNumber}'
                             : 'Linked to page ${widget.linkedPageNumber}',
                         style: theme.textTheme.bodySmall?.copyWith(
-                            color: theme.colorScheme.primary),
+                          color: theme.colorScheme.primary,
+                        ),
                       ),
                     ),
                   ],
@@ -188,6 +189,7 @@ class _NoteEditScreenState extends ConsumerState<NoteEditScreen> {
 
             // ── Grade (optional) ─────────────────────────────────────────────
             DropdownButtonFormField<int?>(
+              isExpanded: true,
               initialValue: _grade,
               decoration: const InputDecoration(
                 labelText: 'Grade (optional)',
@@ -196,8 +198,7 @@ class _NoteEditScreenState extends ConsumerState<NoteEditScreen> {
               items: [
                 const DropdownMenuItem(value: null, child: Text('No Grade')),
                 ...AppConstants.grades.map(
-                  (g) =>
-                      DropdownMenuItem(value: g, child: Text('Grade $g')),
+                  (g) => DropdownMenuItem(value: g, child: Text('Grade $g')),
                 ),
               ],
               onChanged: (v) => setState(() => _grade = v),
@@ -207,15 +208,19 @@ class _NoteEditScreenState extends ConsumerState<NoteEditScreen> {
             // ── Subject (optional) ───────────────────────────────────────────
             subjectsAsync.when(
               data: (subjects) => DropdownButtonFormField<int?>(
-                initialValue:
-                    subjects.any((s) => s.id == _subjectId) ? _subjectId : null,
+                isExpanded: true,
+                initialValue: subjects.any((s) => s.id == _subjectId)
+                    ? _subjectId
+                    : null,
                 decoration: const InputDecoration(
                   labelText: 'Subject (optional)',
                   prefixIcon: Icon(Icons.subject_outlined),
                 ),
                 items: [
                   const DropdownMenuItem(
-                      value: null, child: Text('No Subject')),
+                    value: null,
+                    child: Text('No Subject'),
+                  ),
                   ...subjects.map(
                     (s) => DropdownMenuItem(value: s.id, child: Text(s.name)),
                   ),

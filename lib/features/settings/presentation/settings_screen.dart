@@ -3,7 +3,9 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../../app/router.dart';
+import '../../../app/theme/app_colors.dart';
 import '../../../app/theme/theme_provider.dart';
+import '../../../core/widgets/settings_section.dart';
 import '../../ai/data/ai_settings.dart';
 import '../../ai/presentation/ai_settings_dialog.dart';
 import '../../pdf_reader/data/reader_providers.dart';
@@ -28,97 +30,119 @@ class SettingsScreen extends ConsumerWidget {
     return Scaffold(
       appBar: AppBar(title: const Text('Settings')),
       body: ListView(
+        padding: const EdgeInsets.fromLTRB(16, 8, 16, 32),
         children: [
-          // ── Appearance ────────────────────────────────────────────────────
-          _SectionHeader('Appearance'),
-          _ThemeTile(current: themeMode),
+          const _AppIdentityCard(),
 
-          const Divider(height: 1),
-
-          // ── Reading Preferences ───────────────────────────────────────────
-          _SectionHeader('Reading Preferences'),
-          _ReadingModeTile(settings: readerSettings),
-          _SwitchTile(
-            icon: Icons.format_list_numbered,
-            title: 'Show Page Numbers',
-            subtitle: 'Display current page and total in reader',
-            value: readerSettings.showPageNumbers,
-            onChanged: (v) =>
-                ref.read(readerSettingsProvider.notifier).setShowPageNumbers(v),
-          ),
-          _SwitchTile(
-            icon: Icons.crop_free_outlined,
-            title: 'Distraction-Free Mode',
-            subtitle: 'Auto-hide toolbar after 3 seconds',
-            value: readerSettings.distractionFree,
-            onChanged: (v) =>
-                ref.read(readerSettingsProvider.notifier).setDistractionFree(v),
+          SettingsSection(
+            title: 'Appearance',
+            children: [_ThemeTile(current: themeMode)],
           ),
 
-          const Divider(height: 1),
-
-          // ── Library ────────────────────────────────────────────────────────
-          _SectionHeader('Library'),
-          ListTile(
-            leading: const Icon(Icons.label_outlined),
-            title: const Text('Manage Subjects'),
-            subtitle: const Text('Add, rename, or delete subjects'),
-            trailing: const Icon(Icons.chevron_right),
-            onTap: () => context.push(AppRoutes.subjects),
+          SettingsSection(
+            title: 'Reading Preferences',
+            children: [
+              _ReadingModeTile(settings: readerSettings),
+              SettingsSwitchTile(
+                icon: Icons.format_list_numbered_rounded,
+                title: 'Show Page Numbers',
+                subtitle: 'Display current page and total in reader',
+                value: readerSettings.showPageNumbers,
+                onChanged: (v) => ref
+                    .read(readerSettingsProvider.notifier)
+                    .setShowPageNumbers(v),
+              ),
+              SettingsSwitchTile(
+                icon: Icons.fullscreen_rounded,
+                title: 'Distraction-Free Mode',
+                subtitle: 'Auto-hide toolbar after 3 seconds',
+                value: readerSettings.distractionFree,
+                onChanged: (v) => ref
+                    .read(readerSettingsProvider.notifier)
+                    .setDistractionFree(v),
+              ),
+            ],
           ),
 
-          const Divider(height: 1),
-
-          // ── AI Assistant ──────────────────────────────────────────────────
-          _SectionHeader('AI Assistant'),
-          ListTile(
-            leading: const Icon(Icons.auto_awesome_outlined),
-            title: const Text('Gemini API Key'),
-            subtitle: Text(
-              aiSettings.isConfigured
-                  ? 'Connected · ${aiSettings.model}'
-                  : 'Not configured · tap to add your key',
-            ),
-            trailing: const Icon(Icons.chevron_right),
-            onTap: () => showAiSettingsDialog(context, ref),
+          SettingsSection(
+            title: 'Library',
+            children: [
+              ListTile(
+                leading: const SettingsTileIcon(Icons.label_outlined),
+                title: const Text('Manage Subjects'),
+                subtitle: const Text('Add, rename, or delete subjects'),
+                trailing: const Icon(Icons.chevron_right_rounded, size: 20),
+                onTap: () => context.push(AppRoutes.subjects),
+              ),
+            ],
           ),
 
-          const Divider(height: 1),
-
-          // ── Backup & Restore ─────────────────────────────────────────────
-          _SectionHeader('Backup & Restore'),
-          ListTile(
-            leading: const Icon(Icons.backup_outlined),
-            title: const Text('Backup & Restore'),
-            subtitle: const Text('Export or import all your data'),
-            trailing: const Icon(Icons.chevron_right),
-            onTap: () => context.push(AppRoutes.backup),
+          SettingsSection(
+            title: 'AI Assistant',
+            children: [
+              ListTile(
+                leading: const SettingsTileIcon(
+                  Icons.auto_awesome_rounded,
+                  color: AppColors.violet,
+                ),
+                title: const Text('Gemini API Key'),
+                subtitle: Text(
+                  aiSettings.isConfigured
+                      ? 'Connected · ${aiSettings.model}'
+                      : 'Not configured · tap to add your key',
+                ),
+                trailing: const Icon(Icons.chevron_right_rounded, size: 20),
+                onTap: () => showAiSettingsDialog(context, ref),
+              ),
+            ],
           ),
 
-          const Divider(height: 1),
-
-          // ── Security ────────────────────────────────────────────────────
-          _SectionHeader('Security'),
-          ListTile(
-            leading: const Icon(Icons.lock_outlined),
-            title: const Text('App Lock'),
-            subtitle: const Text('PIN and biometric protection'),
-            trailing: const Icon(Icons.chevron_right),
-            onTap: () => context.push(AppRoutes.securitySettings),
+          SettingsSection(
+            title: 'Backup & Restore',
+            children: [
+              ListTile(
+                leading: const SettingsTileIcon(
+                  Icons.backup_outlined,
+                  color: AppColors.amber,
+                ),
+                title: const Text('Backup & Restore'),
+                subtitle: const Text('Export or import all your data'),
+                trailing: const Icon(Icons.chevron_right_rounded, size: 20),
+                onTap: () => context.push(AppRoutes.backup),
+              ),
+            ],
           ),
 
-          const Divider(height: 1),
-
-          // ── About ─────────────────────────────────────────────────────────
-          _SectionHeader('About'),
-          ListTile(
-            leading: const Icon(Icons.info_outline),
-            title: const Text('About TutorMate'),
-            subtitle: const Text('Version 1.0.0 · Developer: Suleyman Abdu'),
-            trailing: const Icon(Icons.chevron_right),
-            onTap: () => context.push(AppRoutes.about),
+          SettingsSection(
+            title: 'Security',
+            children: [
+              ListTile(
+                leading: const SettingsTileIcon(Icons.lock_outline_rounded),
+                title: const Text('App Lock'),
+                subtitle: const Text('PIN and biometric protection'),
+                trailing: const Icon(Icons.chevron_right_rounded, size: 20),
+                onTap: () => context.push(AppRoutes.securitySettings),
+              ),
+            ],
           ),
-          const SizedBox(height: 24),
+
+          SettingsSection(
+            title: 'About',
+            children: [
+              ListTile(
+                leading: const SettingsTileIcon(
+                  Icons.info_outline_rounded,
+                  color: AppColors.slate,
+                ),
+                title: const Text('About TutorMate'),
+                subtitle: const Text(
+                  'Version 1.0.0 · Developer: Suleyman Abdu',
+                ),
+                trailing: const Icon(Icons.chevron_right_rounded, size: 20),
+                onTap: () => context.push(AppRoutes.about),
+              ),
+            ],
+          ),
         ],
       ),
     );
@@ -127,54 +151,86 @@ class SettingsScreen extends ConsumerWidget {
 
 // ── Shared tile widgets ───────────────────────────────────────────────────────
 
-class _SectionHeader extends StatelessWidget {
-  const _SectionHeader(this.title);
-  final String title;
+class _AppIdentityCard extends StatelessWidget {
+  const _AppIdentityCard();
 
   @override
   Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(16, 20, 16, 4),
-      child: Text(
-        title.toUpperCase(),
-        style: Theme.of(context).textTheme.labelSmall?.copyWith(
-              color: Theme.of(context).colorScheme.primary,
-              fontWeight: FontWeight.w700,
-              letterSpacing: 0.8,
+    final ThemeData theme = Theme.of(context);
+    final ColorScheme colorScheme = theme.colorScheme;
+
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(20),
+        gradient: LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [
+            colorScheme.primaryContainer.withValues(alpha: 0.65),
+            colorScheme.secondaryContainer.withValues(alpha: 0.35),
+          ],
+        ),
+        border: Border.all(color: colorScheme.primary.withValues(alpha: 0.08)),
+      ),
+      child: Row(
+        children: [
+          Container(
+            width: 54,
+            height: 54,
+            decoration: BoxDecoration(
+              color: colorScheme.primary,
+              borderRadius: BorderRadius.circular(16),
+              boxShadow: [
+                BoxShadow(
+                  color: colorScheme.primary.withValues(alpha: 0.28),
+                  blurRadius: 14,
+                  offset: const Offset(0, 5),
+                ),
+              ],
             ),
+            child: const Icon(
+              Icons.auto_stories_rounded,
+              color: Colors.white,
+              size: 28,
+            ),
+          ),
+          const SizedBox(width: 14),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'TutorMate',
+                  style: theme.textTheme.titleMedium?.copyWith(
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+                const SizedBox(height: 3),
+                Text(
+                  'Your offline reading companion',
+                  style: theme.textTheme.bodySmall?.copyWith(
+                    color: colorScheme.onSurfaceVariant,
+                  ),
+                ),
+                const SizedBox(height: 5),
+                Text(
+                  'Version 1.0.0',
+                  style: theme.textTheme.labelSmall?.copyWith(
+                    color: colorScheme.primary,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
       ),
     );
   }
 }
 
-class _SwitchTile extends StatelessWidget {
-  const _SwitchTile({
-    required this.icon,
-    required this.title,
-    required this.subtitle,
-    required this.value,
-    required this.onChanged,
-  });
-
-  final IconData icon;
-  final String title;
-  final String subtitle;
-  final bool value;
-  final ValueChanged<bool> onChanged;
-
-  @override
-  Widget build(BuildContext context) {
-    return SwitchListTile(
-      secondary: Icon(icon),
-      title: Text(title),
-      subtitle: Text(subtitle),
-      value: value,
-      onChanged: onChanged,
-    );
-  }
-}
-
-// ── Theme tile ────────────────────────────────────────────────────────────────
+// ── Theme tile ───────────────────────────────────────────────────────────────
 
 class _ThemeTile extends ConsumerWidget {
   const _ThemeTile({required this.current});
@@ -183,10 +239,10 @@ class _ThemeTile extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     return ListTile(
-      leading: Icon(_iconFor(current)),
+      leading: SettingsTileIcon(_iconFor(current), color: AppColors.violet),
       title: const Text('Theme'),
       subtitle: Text(_labelFor(current)),
-      trailing: const Icon(Icons.chevron_right),
+      trailing: const Icon(Icons.chevron_right_rounded, size: 20),
       onTap: () => _showThemePicker(context, ref),
     );
   }
@@ -202,9 +258,9 @@ class _ThemeTile extends ConsumerWidget {
               padding: const EdgeInsets.all(16),
               child: Text(
                 'Choose Theme',
-                style: Theme.of(ctx).textTheme.titleMedium?.copyWith(
-                      fontWeight: FontWeight.w600,
-                    ),
+                style: Theme.of(
+                  ctx,
+                ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w600),
               ),
             ),
             const Divider(height: 1),
@@ -213,9 +269,7 @@ class _ThemeTile extends ConsumerWidget {
               label: 'Light',
               selected: current == ThemeMode.light,
               onTap: () {
-                ref
-                    .read(themeModeProvider.notifier)
-                    .setTheme(ThemeMode.light);
+                ref.read(themeModeProvider.notifier).setTheme(ThemeMode.light);
                 Navigator.of(ctx).pop();
               },
             ),
@@ -224,9 +278,7 @@ class _ThemeTile extends ConsumerWidget {
               label: 'Dark',
               selected: current == ThemeMode.dark,
               onTap: () {
-                ref
-                    .read(themeModeProvider.notifier)
-                    .setTheme(ThemeMode.dark);
+                ref.read(themeModeProvider.notifier).setTheme(ThemeMode.dark);
                 Navigator.of(ctx).pop();
               },
             ),
@@ -235,9 +287,7 @@ class _ThemeTile extends ConsumerWidget {
               label: 'System Default',
               selected: current == ThemeMode.system,
               onTap: () {
-                ref
-                    .read(themeModeProvider.notifier)
-                    .setTheme(ThemeMode.system);
+                ref.read(themeModeProvider.notifier).setTheme(ThemeMode.system);
                 Navigator.of(ctx).pop();
               },
             ),
@@ -287,8 +337,10 @@ class _ThemeOption extends StatelessWidget {
   Widget build(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
     return ListTile(
-      leading: Icon(icon,
-          color: selected ? colorScheme.primary : colorScheme.onSurface),
+      leading: Icon(
+        icon,
+        color: selected ? colorScheme.primary : colorScheme.onSurface,
+      ),
       title: Text(
         label,
         style: TextStyle(
@@ -313,14 +365,15 @@ class _ReadingModeTile extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     return ListTile(
-      leading: Icon(
+      leading: SettingsTileIcon(
         settings.mode == ReadingMode.continuous
             ? Icons.view_day_outlined
             : Icons.auto_stories_outlined,
+        color: Theme.of(context).colorScheme.secondary,
       ),
       title: const Text('Reading Mode'),
       subtitle: Text(settings.mode.label),
-      trailing: const Icon(Icons.chevron_right),
+      trailing: const Icon(Icons.chevron_right_rounded, size: 20),
       onTap: () => _showModePicker(context, ref),
     );
   }
@@ -336,9 +389,9 @@ class _ReadingModeTile extends ConsumerWidget {
               padding: const EdgeInsets.all(16),
               child: Text(
                 'Reading Mode',
-                style: Theme.of(ctx).textTheme.titleMedium?.copyWith(
-                      fontWeight: FontWeight.w600,
-                    ),
+                style: Theme.of(
+                  ctx,
+                ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w600),
               ),
             ),
             const Divider(height: 1),
@@ -347,8 +400,10 @@ class _ReadingModeTile extends ConsumerWidget {
               title: const Text('Continuous Scroll'),
               subtitle: const Text('Pages flow continuously'),
               trailing: settings.mode == ReadingMode.continuous
-                  ? Icon(Icons.check_circle,
-                      color: Theme.of(ctx).colorScheme.primary)
+                  ? Icon(
+                      Icons.check_circle,
+                      color: Theme.of(ctx).colorScheme.primary,
+                    )
                   : null,
               onTap: () {
                 ref
@@ -362,8 +417,10 @@ class _ReadingModeTile extends ConsumerWidget {
               title: const Text('Single Page'),
               subtitle: const Text('One page at a time'),
               trailing: settings.mode == ReadingMode.singlePage
-                  ? Icon(Icons.check_circle,
-                      color: Theme.of(ctx).colorScheme.primary)
+                  ? Icon(
+                      Icons.check_circle,
+                      color: Theme.of(ctx).colorScheme.primary,
+                    )
                   : null,
               onTap: () {
                 ref
