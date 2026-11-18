@@ -18,7 +18,7 @@ import '../features/notes/presentation/note_edit_screen.dart';
 import '../features/notes/presentation/notes_screen.dart';
 import '../features/settings/presentation/settings_screen.dart';
 import '../features/subjects/presentation/subjects_screen.dart';
-import '../features/pdf_reader/presentation/reader_screen.dart';
+import '../features/pdf_reader/presentation/reader_tabs_screen.dart';
 
 /// Application routes, used for navigation and deep linking.
 class AppRoutes {
@@ -183,7 +183,7 @@ GoRouter buildRouter() {
         builder: (context, state) {
           final bookId = int.parse(state.pathParameters['bookId']!);
           final pageNumber = state.extra as int?;
-          return ReaderScreen(bookId: bookId, pageNumber: pageNumber);
+          return ReaderTabsScreen(bookId: bookId, pageNumber: pageNumber);
         },
       ),
       // Note edit/create route

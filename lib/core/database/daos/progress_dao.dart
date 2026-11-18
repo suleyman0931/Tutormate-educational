@@ -2,6 +2,15 @@ import 'package:drift/drift.dart';
 
 import '../app_database.dart';
 
+/// A book paired with its saved reading progress, used by the dashboard's
+/// "Continue Reading" list.
+class ContinueReadingItem {
+  final Book book;
+  final ReadingProgressEntry progress;
+
+  const ContinueReadingItem({required this.book, required this.progress});
+}
+
 /// Data-access object for the [ReadingProgress] table.
 class ProgressDao {
   final AppDatabase _db;
@@ -14,6 +23,31 @@ class ProgressDao {
     return (_db.select(_db.readingProgress)
           ..where((t) => t.bookId.equals(bookId)))
         .watchSingleOrNull();
+  }
+
+  /// Watches every book that has saved progress, most recently read first.
+  Stream<List<ContinueReadingItem>> watchContinueReading({int limit = 7}) {
+    final query = _db.select(_db.readingProgress).join([
+      innerJoin(_db.books, _db.books.id.equalsExp(_db.readingProgress.bookId)),
+    ])
+      ..orderBy([OrderingTerm.desc(_db.readingProgress.lastReadAt)])
+      ..limit(limit);
+
+    return query.watch().map(
+          (rows) => rows
+              .map(
+                (row) => ContinueReadingItem(
+                  book: row.readTable(_db.books),
+                  progress: row.readTable(_db.readingProgress),
+                ),
+              )
+              .toList(),
+        );
+  }
+
+  /// Watches progress rows for all books (used to show pages in reader tabs).
+  Stream<List<ReadingProgressEntry>> watchAllProgress() {
+    return _db.select(_db.readingProgress).watch();
   }
 
   /// Returns reading progress for a book, or null.

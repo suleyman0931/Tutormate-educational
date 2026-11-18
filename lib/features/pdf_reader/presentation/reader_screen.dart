@@ -7,7 +7,6 @@ import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:pdfrx/pdfrx.dart' as pdfrx;
-import 'package:wakelock_plus/wakelock_plus.dart';
 
 import '../../../app/constants/app_constants.dart';
 import '../../../app/router.dart';
@@ -27,9 +26,18 @@ import '../data/reader_providers.dart';
 /// Handles document conversion, resume-at-last-page, reading modes, and
 /// annotation overlays.
 class ReaderScreen extends ConsumerStatefulWidget {
-  const ReaderScreen({super.key, required this.bookId, this.pageNumber});
+  const ReaderScreen({
+    super.key,
+    required this.bookId,
+    this.pageNumber,
+    this.showResumePrompt = true,
+  });
   final int bookId;
   final int? pageNumber; // Page to open directly (from bookmark or continue)
+
+  /// When false, the saved page is restored without asking "Continue Reading?".
+  /// Reader tabs use this so background tabs open silently.
+  final bool showResumePrompt;
 
   @override
   ConsumerState<ReaderScreen> createState() => _ReaderScreenState();
@@ -73,7 +81,6 @@ class _ReaderScreenState extends ConsumerState<ReaderScreen>
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
-    WakelockPlus.enable(); // Keep screen awake while reading
     _progressDao = ref.read(progressDaoProvider);
     _loadBook();
     _schedulePeriodicSave();
@@ -83,7 +90,6 @@ class _ReaderScreenState extends ConsumerState<ReaderScreen>
   @override
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
-    WakelockPlus.disable(); // Allow screen to sleep
     _toolbarHideTimer?.cancel();
     _saveTimer?.cancel();
     _saveProgress();
@@ -162,28 +168,32 @@ class _ReaderScreenState extends ConsumerState<ReaderScreen>
     } else {
       final progress = await _progressDao.getProgress(widget.bookId);
       if (progress != null && progress.currentPage > 1 && mounted) {
-        final shouldContinue = await showDialog<bool>(
-          context: context,
-          builder: (context) => AlertDialog(
-            title: const Text('Continue Reading?'),
-            content: Text(
-              'You were on page ${progress.currentPage}. Do you want to continue from where you left off?',
-            ),
-            actions: [
-              TextButton(
-                onPressed: () => Navigator.of(context).pop(false),
-                child: const Text('Start from Beginning'),
-              ),
-              FilledButton(
-                onPressed: () => Navigator.of(context).pop(true),
-                child: const Text('Continue'),
-              ),
-            ],
-          ),
-        );
-
-        if (shouldContinue == true) {
+        if (!widget.showResumePrompt) {
           initialPage = progress.currentPage;
+        } else {
+          final shouldContinue = await showDialog<bool>(
+            context: context,
+            builder: (context) => AlertDialog(
+              title: const Text('Continue Reading?'),
+              content: Text(
+                'You were on page ${progress.currentPage}. Do you want to continue from where you left off?',
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.of(context).pop(false),
+                  child: const Text('Start from Beginning'),
+                ),
+                FilledButton(
+                  onPressed: () => Navigator.of(context).pop(true),
+                  child: const Text('Continue'),
+                ),
+              ],
+            ),
+          );
+
+          if (shouldContinue == true) {
+            initialPage = progress.currentPage;
+          }
         }
       }
     }
@@ -260,6 +270,10 @@ class _ReaderScreenState extends ConsumerState<ReaderScreen>
             .updatePageCount(widget.bookId, pageCount),
       );
     }
+
+    // Persist the resumed page right away so the dashboard and reader tabs
+    // show the correct page even before the next periodic save.
+    await _saveProgress();
   }
 
   void _toggleToolbar() {
@@ -325,6 +339,26 @@ class _ReaderScreenState extends ConsumerState<ReaderScreen>
     if (!_ready) return;
     await _pdfrxController.zoomDown(
       duration: const Duration(milliseconds: 150),
+    );
+  }
+
+  /// Pans the zoomed page. A positive direction means "move the viewport
+  /// toward that edge", so pressing right reveals content on the right.
+  Future<void> _panBy(Offset direction) async {
+    if (!_ready) return;
+
+    // Move by roughly a quarter of the visible area on each press.
+    final stepX =
+        (_pdfrxController.viewSize.width * 0.28).clamp(48.0, 280.0);
+    final stepY =
+        (_pdfrxController.viewSize.height * 0.22).clamp(48.0, 280.0);
+    final delta = Offset(direction.dx * stepX, direction.dy * stepY);
+
+    final next = _pdfrxController.value.clone()
+      ..translateByDouble(delta.dx, delta.dy, 0, 1);
+    await _pdfrxController.goTo(
+      next,
+      duration: const Duration(milliseconds: 120),
     );
   }
 
@@ -688,51 +722,122 @@ class _ReaderScreenState extends ConsumerState<ReaderScreen>
     return Positioned(
       left: 12,
       bottom: MediaQuery.of(context).padding.bottom + 76,
-      child: Material(
-        color: Colors.black.withValues(alpha: 0.75),
-        borderRadius: BorderRadius.circular(22),
-        elevation: 4,
-        child: AnimatedBuilder(
-          animation: _pdfrxController,
-          builder: (context, _) {
-            final zoom = (_pdfrxController.currentZoom * 100).round();
-            return Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                IconButton(
-                  onPressed: _zoomIn,
-                  tooltip: 'Zoom in',
-                  icon: const Icon(Icons.add, color: Colors.white, size: 22),
-                  style: IconButton.styleFrom(
-                    minimumSize: const Size(44, 44),
-                    padding: EdgeInsets.zero,
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.end,
+        children: [
+          Material(
+            color: Colors.black.withValues(alpha: 0.75),
+            borderRadius: BorderRadius.circular(22),
+            elevation: 4,
+            child: AnimatedBuilder(
+              animation: _pdfrxController,
+              builder: (context, _) {
+                final zoom = (_pdfrxController.currentZoom * 100).round();
+                return Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    IconButton(
+                      onPressed: _zoomIn,
+                      tooltip: 'Zoom in',
+                      icon: const Icon(
+                        Icons.add,
+                        color: Colors.white,
+                        size: 22,
+                      ),
+                      style: IconButton.styleFrom(
+                        minimumSize: const Size(44, 44),
+                        padding: EdgeInsets.zero,
+                      ),
+                    ),
+                    Text(
+                      '$zoom%',
+                      style: const TextStyle(
+                        color: Colors.white70,
+                        fontSize: 10,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                    IconButton(
+                      onPressed: _zoomOut,
+                      tooltip: 'Zoom out',
+                      icon: const Icon(
+                        Icons.remove,
+                        color: Colors.white,
+                        size: 22,
+                      ),
+                      style: IconButton.styleFrom(
+                        minimumSize: const Size(44, 44),
+                        padding: EdgeInsets.zero,
+                      ),
+                    ),
+                  ],
+                );
+              },
+            ),
+          ),
+          const SizedBox(width: 8),
+          _buildPanPad(),
+        ],
+      ),
+    );
+  }
+
+  /// Four-direction pad used to reach the edges of a zoomed page.
+  Widget _buildPanPad() {
+    return Material(
+      color: Colors.black.withValues(alpha: 0.75),
+      borderRadius: BorderRadius.circular(18),
+      elevation: 4,
+      child: AnimatedBuilder(
+        animation: _pdfrxController,
+        builder: (context, _) {
+          final zoomed = _pdfrxController.currentZoom > 1.01;
+          return Opacity(
+            opacity: zoomed ? 1 : 0.45,
+            child: Padding(
+              padding: const EdgeInsets.all(3),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  _PanButton(
+                    icon: Icons.keyboard_arrow_up_rounded,
+                    tooltip: 'Move up',
+                    onPan: () => _panBy(const Offset(0, 1)),
                   ),
-                ),
-                Text(
-                  '$zoom%',
-                  style: const TextStyle(
-                    color: Colors.white70,
-                    fontSize: 10,
-                    fontWeight: FontWeight.w600,
+                  Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      _PanButton(
+                        icon: Icons.keyboard_arrow_left_rounded,
+                        tooltip: 'Move left',
+                        onPan: () => _panBy(const Offset(1, 0)),
+                      ),
+                      const SizedBox(
+                        width: 34,
+                        height: 34,
+                        child: Icon(
+                          Icons.open_with_rounded,
+                          color: Colors.white24,
+                          size: 16,
+                        ),
+                      ),
+                      _PanButton(
+                        icon: Icons.keyboard_arrow_right_rounded,
+                        tooltip: 'Move right',
+                        onPan: () => _panBy(const Offset(-1, 0)),
+                      ),
+                    ],
                   ),
-                ),
-                IconButton(
-                  onPressed: _zoomOut,
-                  tooltip: 'Zoom out',
-                  icon: const Icon(
-                    Icons.remove,
-                    color: Colors.white,
-                    size: 22,
+                  _PanButton(
+                    icon: Icons.keyboard_arrow_down_rounded,
+                    tooltip: 'Move down',
+                    onPan: () => _panBy(const Offset(0, -1)),
                   ),
-                  style: IconButton.styleFrom(
-                    minimumSize: const Size(44, 44),
-                    padding: EdgeInsets.zero,
-                  ),
-                ),
-              ],
-            );
-          },
-        ),
+                ],
+              ),
+            ),
+          );
+        },
       ),
     );
   }
@@ -997,6 +1102,66 @@ class _ReaderScreenState extends ConsumerState<ReaderScreen>
               ),
             ],
           ),
+        ),
+      ),
+    );
+  }
+}
+
+
+/// Small directional button that keeps panning while held down.
+class _PanButton extends StatefulWidget {
+  const _PanButton({
+    required this.icon,
+    required this.tooltip,
+    required this.onPan,
+  });
+
+  final IconData icon;
+  final String tooltip;
+  final VoidCallback onPan;
+
+  @override
+  State<_PanButton> createState() => _PanButtonState();
+}
+
+class _PanButtonState extends State<_PanButton> {
+  Timer? _repeatTimer;
+
+  void _startPanning() {
+    widget.onPan();
+    _repeatTimer?.cancel();
+    _repeatTimer = Timer.periodic(
+      const Duration(milliseconds: 140),
+      (_) => widget.onPan(),
+    );
+  }
+
+  void _stopPanning() {
+    _repeatTimer?.cancel();
+    _repeatTimer = null;
+  }
+
+  @override
+  void dispose() {
+    _stopPanning();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Tooltip(
+      message: widget.tooltip,
+      triggerMode: TooltipTriggerMode.manual,
+      child: GestureDetector(
+        behavior: HitTestBehavior.opaque,
+        onTapDown: (_) => _startPanning(),
+        onTapUp: (_) => _stopPanning(),
+        onTapCancel: _stopPanning,
+        child: SizedBox(
+          width: 34,
+          height: 34,
+          child: Icon(widget.icon, color: Colors.white, size: 22),
         ),
       ),
     );

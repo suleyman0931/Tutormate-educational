@@ -8,6 +8,7 @@ import 'package:go_router/go_router.dart';
 import '../../../app/router.dart';
 import '../../../app/theme/app_colors.dart';
 import '../../../core/database/app_database.dart';
+import '../../../core/database/daos/progress_dao.dart';
 import '../../../core/widgets/section_header.dart';
 import '../../../core/widgets/stat_card.dart';
 import '../../library/data/library_providers.dart';
@@ -496,18 +497,25 @@ class _ContinueReadingSection extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final lastBookAsync = ref.watch(lastOpenedBookProvider);
+    final continueAsync = ref.watch(continueReadingProvider);
 
-    return lastBookAsync.when(
-      data: (book) {
-        if (book == null) return const SizedBox.shrink();
+    return continueAsync.when(
+      data: (items) {
+        if (items.isEmpty) return const SizedBox.shrink();
         return Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             const SectionHeader(title: 'Continue Reading'),
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 16),
-              child: _ContinueReadingCard(book: book),
+            SizedBox(
+              height: 158,
+              child: ListView.separated(
+                scrollDirection: Axis.horizontal,
+                padding: const EdgeInsets.symmetric(horizontal: 16),
+                itemCount: items.length,
+                separatorBuilder: (_, _) => const SizedBox(width: 12),
+                itemBuilder: (context, index) =>
+                    _ContinueReadingCard(item: items[index]),
+              ),
             ),
           ],
         );
@@ -519,170 +527,163 @@ class _ContinueReadingSection extends ConsumerWidget {
 }
 
 class _ContinueReadingCard extends ConsumerWidget {
-  const _ContinueReadingCard({required this.book});
+  const _ContinueReadingCard({required this.item});
 
-  final Book book;
+  final ContinueReadingItem item;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final progressAsync = ref.watch(progressByBookProvider(book.id));
-    final subjectMapAsync = ref.watch(subjectMapProvider);
-    final ThemeData theme = Theme.of(context);
+    final Book book = item.book;
+    final int page = item.progress.currentPage;
+    final int total = book.totalPages;
     final String subjectName =
-        subjectMapAsync.valueOrNull?[book.subjectId] ?? '';
+        ref.watch(subjectMapProvider).valueOrNull?[book.subjectId] ?? '';
+    final ThemeData theme = Theme.of(context);
     final bool isDark = theme.brightness == Brightness.dark;
 
-    return Container(
-      decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(22),
-        boxShadow: [
-          BoxShadow(
-            color: AppColors.primary.withValues(alpha: isDark ? 0.35 : 0.22),
-            blurRadius: 24,
-            offset: const Offset(0, 10),
-          ),
-        ],
-      ),
-      child: ClipRRect(
-        borderRadius: BorderRadius.circular(22),
-        child: Material(
-          color: Colors.transparent,
-          child: Ink(
-            decoration: const BoxDecoration(gradient: AppColors.heroGradient),
-            child: InkWell(
-              onTap: () {
-                ref.read(booksDaoProvider).updateLastOpened(book.id);
-                final savedPage = progressAsync.valueOrNull?.currentPage;
-                context.push(
-                  AppRoutes.readerFor(book.id),
-                  extra: savedPage != null && savedPage > 1 ? savedPage : null,
-                );
-              },
-              child: Padding(
-                padding: const EdgeInsets.all(16),
-                child: Row(
-                  children: [
-                    Container(
-                      width: 72,
-                      height: 98,
-                      decoration: BoxDecoration(
-                        borderRadius: BorderRadius.circular(12),
-                        border: Border.all(
-                          color: Colors.white.withValues(alpha: 0.22),
+    double value = item.progress.progressPercentage;
+    if (total > 0) value = page / total;
+    value = value.clamp(0.0, 1.0);
+    final int pct = (value * 100).round();
+
+    return SizedBox(
+      width: 288,
+      child: DecoratedBox(
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(20),
+          boxShadow: [
+            BoxShadow(
+              color: AppColors.primary.withValues(alpha: isDark ? 0.35 : 0.22),
+              blurRadius: 20,
+              offset: const Offset(0, 8),
+            ),
+          ],
+        ),
+        child: ClipRRect(
+          borderRadius: BorderRadius.circular(20),
+          child: Material(
+            color: Colors.transparent,
+            child: Ink(
+              decoration: const BoxDecoration(gradient: AppColors.heroGradient),
+              child: InkWell(
+                onTap: () {
+                  ref.read(booksDaoProvider).updateLastOpened(book.id);
+                  context.push(
+                    AppRoutes.readerFor(book.id),
+                    extra: page > 1 ? page : null,
+                  );
+                },
+                child: Padding(
+                  padding: const EdgeInsets.all(12),
+                  child: Row(
+                    children: [
+                      Container(
+                        width: 64,
+                        height: 92,
+                        decoration: BoxDecoration(
+                          borderRadius: BorderRadius.circular(10),
+                          border: Border.all(
+                            color: Colors.white.withValues(alpha: 0.22),
+                          ),
+                          boxShadow: [
+                            BoxShadow(
+                              color: Colors.black.withValues(alpha: 0.28),
+                              blurRadius: 10,
+                              offset: const Offset(0, 4),
+                            ),
+                          ],
                         ),
-                        boxShadow: [
-                          BoxShadow(
-                            color: Colors.black.withValues(alpha: 0.28),
-                            blurRadius: 12,
-                            offset: const Offset(0, 4),
-                          ),
-                        ],
+                        child: ClipRRect(
+                          borderRadius: BorderRadius.circular(9),
+                          child: _buildCover(),
+                        ),
                       ),
-                      child: ClipRRect(
-                        borderRadius: BorderRadius.circular(11),
-                        child: _buildCover(),
-                      ),
-                    ),
-                    const SizedBox(width: 15),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            'PICK UP WHERE YOU LEFT OFF',
-                            style: TextStyle(
-                              color: Colors.white.withValues(alpha: 0.55),
-                              fontSize: 9.5,
-                              fontWeight: FontWeight.w700,
-                              letterSpacing: 1.1,
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            Text(
+                              'PICK UP WHERE YOU LEFT OFF',
+                              style: TextStyle(
+                                color: Colors.white.withValues(alpha: 0.55),
+                                fontSize: 8.5,
+                                fontWeight: FontWeight.w700,
+                                letterSpacing: 1,
+                              ),
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
                             ),
-                          ),
-                          const SizedBox(height: 5),
-                          Text(
-                            book.title,
-                            style: theme.textTheme.titleMedium?.copyWith(
-                              color: Colors.white,
-                              fontWeight: FontWeight.w700,
-                              height: 1.2,
+                            const SizedBox(height: 4),
+                            Text(
+                              book.title,
+                              style: theme.textTheme.titleSmall?.copyWith(
+                                color: Colors.white,
+                                fontWeight: FontWeight.w700,
+                                height: 1.2,
+                              ),
+                              maxLines: 2,
+                              overflow: TextOverflow.ellipsis,
                             ),
-                            maxLines: 2,
-                            overflow: TextOverflow.ellipsis,
-                          ),
-                          const SizedBox(height: 8),
-                          Row(
-                            children: [
-                              _chip('Grade ${book.grade}'),
-                              if (subjectName.isNotEmpty) ...[
-                                const SizedBox(width: 5),
-                                Flexible(child: _chip(subjectName)),
-                              ],
-                            ],
-                          ),
-                          const SizedBox(height: 10),
-                          progressAsync.when(
-                            data: (progress) {
-                              final int page = progress?.currentPage ?? 1;
-                              final int total = book.totalPages;
-                              final double value =
-                                  total > 0 ? (page / total).clamp(0.0, 1.0) : 0;
-                              final int pct = (value * 100).round();
-                              return Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  ClipRRect(
-                                    borderRadius: BorderRadius.circular(4),
-                                    child: LinearProgressIndicator(
-                                      value: value,
-                                      minHeight: 5,
-                                      backgroundColor:
-                                          Colors.white.withValues(alpha: 0.18),
-                                      valueColor: const AlwaysStoppedAnimation<Color>(
-                                        AppColors.accentLight,
-                                      ),
-                                    ),
-                                  ),
-                                  const SizedBox(height: 5),
-                                  Text(
-                                    total > 0
-                                        ? 'Page $page of $total · $pct%'
-                                        : 'Page $page',
-                                    style: TextStyle(
-                                      color: Colors.white.withValues(alpha: 0.68),
-                                      fontSize: 11,
-                                      fontWeight: FontWeight.w500,
-                                    ),
-                                  ),
+                            const SizedBox(height: 6),
+                            Row(
+                              children: [
+                                _chip('Grade ${book.grade}'),
+                                if (subjectName.isNotEmpty) ...[
+                                  const SizedBox(width: 5),
+                                  Flexible(child: _chip(subjectName)),
                                 ],
-                              );
-                            },
-                            loading: () => LinearProgressIndicator(
-                              backgroundColor:
-                                  Colors.white.withValues(alpha: 0.18),
-                              minHeight: 5,
+                              ],
                             ),
-                            error: (_, _) => const SizedBox.shrink(),
-                          ),
-                        ],
-                      ),
-                    ),
-                    const SizedBox(width: 10),
-                    Container(
-                      width: 42,
-                      height: 42,
-                      decoration: BoxDecoration(
-                        color: Colors.white.withValues(alpha: 0.14),
-                        shape: BoxShape.circle,
-                        border: Border.all(
-                          color: Colors.white.withValues(alpha: 0.16),
+                            const SizedBox(height: 8),
+                            ClipRRect(
+                              borderRadius: BorderRadius.circular(4),
+                              child: LinearProgressIndicator(
+                                value: value,
+                                minHeight: 5,
+                                backgroundColor:
+                                    Colors.white.withValues(alpha: 0.18),
+                                valueColor: const AlwaysStoppedAnimation<Color>(
+                                  AppColors.accentLight,
+                                ),
+                              ),
+                            ),
+                            const SizedBox(height: 4),
+                            Text(
+                              total > 0
+                                  ? 'Page $page of $total · $pct%'
+                                  : 'Page $page',
+                              style: TextStyle(
+                                color: Colors.white.withValues(alpha: 0.68),
+                                fontSize: 10.5,
+                                fontWeight: FontWeight.w500,
+                              ),
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ],
                         ),
                       ),
-                      child: const Icon(
-                        Icons.play_arrow_rounded,
-                        color: Colors.white,
-                        size: 24,
+                      const SizedBox(width: 6),
+                      Container(
+                        width: 34,
+                        height: 34,
+                        decoration: BoxDecoration(
+                          color: Colors.white.withValues(alpha: 0.14),
+                          shape: BoxShape.circle,
+                          border: Border.all(
+                            color: Colors.white.withValues(alpha: 0.16),
+                          ),
+                        ),
+                        child: const Icon(
+                          Icons.play_arrow_rounded,
+                          color: Colors.white,
+                          size: 20,
+                        ),
                       ),
-                    ),
-                  ],
+                    ],
+                  ),
                 ),
               ),
             ),
@@ -693,8 +694,8 @@ class _ContinueReadingCard extends ConsumerWidget {
   }
 
   Widget _buildCover() {
-    if (book.coverPath != null && book.coverPath!.isNotEmpty) {
-      final File file = File(book.coverPath!);
+    if (item.book.coverPath != null && item.book.coverPath!.isNotEmpty) {
+      final File file = File(item.book.coverPath!);
       if (file.existsSync()) {
         return Image.file(file, fit: BoxFit.cover);
       }
@@ -702,14 +703,14 @@ class _ContinueReadingCard extends ConsumerWidget {
     return ColoredBox(
       color: AppColors.secondary.withValues(alpha: 0.35),
       child: const Center(
-        child: Icon(Icons.auto_stories_rounded, color: Colors.white, size: 26),
+        child: Icon(Icons.auto_stories_rounded, color: Colors.white, size: 22),
       ),
     );
   }
 
   Widget _chip(String label) {
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
+      padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
       decoration: BoxDecoration(
         color: Colors.white.withValues(alpha: 0.14),
         borderRadius: BorderRadius.circular(7),
@@ -718,7 +719,7 @@ class _ContinueReadingCard extends ConsumerWidget {
         label,
         style: const TextStyle(
           color: Colors.white,
-          fontSize: 10,
+          fontSize: 9.5,
           fontWeight: FontWeight.w600,
         ),
         maxLines: 1,

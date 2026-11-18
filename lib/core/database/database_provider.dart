@@ -79,6 +79,17 @@ final lastOpenedBookProvider = StreamProvider<Book?>((ref) {
   return ref.watch(booksDaoProvider).watchLastOpenedBook();
 });
 
+/// Watches up to 7 recently read books together with their saved pages.
+final continueReadingProvider = StreamProvider<List<ContinueReadingItem>>(
+  (ref) => ref.watch(progressDaoProvider).watchContinueReading(),
+);
+
+/// Watches the saved reading progress for every book.
+final allReadingProgressProvider =
+    StreamProvider<List<ReadingProgressEntry>>(
+  (ref) => ref.watch(progressDaoProvider).watchAllProgress(),
+);
+
 /// Watches all bookmarks.
 final allBookmarksProvider = StreamProvider<List<Bookmark>>((ref) {
   return ref.watch(bookmarksDaoProvider).watchAllBookmarks();

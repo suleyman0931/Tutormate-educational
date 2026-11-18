@@ -5,6 +5,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:tutormate/app/theme/app_theme.dart';
 import 'package:tutormate/core/database/app_database.dart';
 import 'package:tutormate/core/database/daos/books_dao.dart';
+import 'package:tutormate/core/database/daos/progress_dao.dart';
 import 'package:tutormate/core/database/enums.dart';
 import 'package:tutormate/features/dashboard/presentation/dashboard_screen.dart';
 import 'package:tutormate/features/bookmarks/presentation/bookmarks_screen.dart';
@@ -103,6 +104,21 @@ void main() {
         ),
         lastOpenedBookProvider.overrideWith(
           (ref) => Stream.value(books.first),
+        ),
+        continueReadingProvider.overrideWith(
+          (ref) => Stream.value([
+            for (final b in books)
+              ContinueReadingItem(
+                book: b,
+                progress: ReadingProgressEntry(
+                  id: b.id,
+                  bookId: b.id,
+                  currentPage: 42,
+                  progressPercentage: 0.35,
+                  lastReadAt: now,
+                ),
+              ),
+          ]),
         ),
         progressByBookProvider.overrideWith(
           (ref, id) => Stream.value(
